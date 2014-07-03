@@ -1,4 +1,0 @@
-hello
-some more text
-
-and yet more
