@@ -19,11 +19,13 @@
 
 /**
  * Stores an array of conditional PMFs for the current column given the previous
- * column
+ * column. PMF pointers are stored in a flat array so don't try to find the PMF you
+ * want directly--use the accessor
  */
 struct cond_pmf_list_t {
+	uint32_t columns;
 	const struct alphabet_t *alphabet;
-	struct pmf_t *pmfs;
+	struct pmf_t **pmfs;
 };
 
 /**
@@ -32,10 +34,11 @@ struct cond_pmf_list_t {
  */
 
 // Memory management
-struct cond_pmf_list_t *alloc_cond_pmf_list(const struct alphabet_t *);
+struct cond_pmf_list_t *alloc_conditional_pmf_list(const struct alphabet_t *alphabet, uint32_t columns);
 void free_cond_pmf_list(struct cond_pmf_list_t *);
 
-// 
+// Accessors
+struct pmf_t *get_cond_pmf(struct cond_pmf_list_t *list, uint32_t column, symbol_t prev);
 
 // Legacy stuff to be converted still
 

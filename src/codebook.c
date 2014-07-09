@@ -1,4 +1,70 @@
 #include "codebook.h"
+#include "pmf.h"
+#include "lines.h"
+
+/**
+ * To compute stats for the training data, we will need a set of conditional PMFs, one
+ * per column
+ * @param alphabet The symbol alphabet for each column
+ * @param columns The number of columns to allocate conditional PMFs for
+ */
+struct cond_pmf_list_t *alloc_conditional_pmf_list(const struct alphabet_t *alphabet, uint32_t columns) {
+	uint32_t count = 1 + alphabet->size*(columns-1);
+	struct cond_pmf_list_t *list = (struct cond_pmf_list_t *) calloc(1, sizeof(struct cond_pmf_list_t));
+
+	// We need one array of PMF pointers that will index into the buffer allocated above, for the columns
+	list->columns = columns;
+	list->alphabet = alphabet;
+	list->pmfs = (struct pmf_t **) calloc(count, sizeof(struct pmf_t *));
+
+	// All PMFs are stored in a flat array, the accessor function will resolve a PMF's address
+	for (i = 0; i < count; ++i) {
+		list->pmfs[i] = alloc_pmf(alphabet);
+	}
+
+	return list;
+}
+
+/**
+ * Deallocate the PMF list given and unallocate the two allocated memory blocks
+ */
+void free_conditional_pmf_list(struct cond_pmf_list_t *list) {
+	uint32_t count = 1 + list->alphabet->size * (list->columns - 1);
+	uint32_t i;
+
+	for (i = 0; i < count; ++i) {
+		free_pmf(list->pmfs[0]);
+	}
+	free(list);
+}
+
+/**
+ * Find a PMF for a specific column with the specific previous value
+ */
+struct pmf_t *get_cond_pmf(struct cond_pmf_list_t *list, uint32_t column, symbol_t prev) {
+	if (column == 0)
+		return list->pmfs[0];
+	return list->pmfs[1 + (column-1)*list->alphabet->size + prev];
+}
+
+/**
+ * Given a quality info struct, which is assumed to have loaded the training set, and a
+ * set of output conditional pmf structures, calculate the statistics of the data
+ */
+void calculate_statistics(struct quality_info_t *info, struct cond_pmf_list_t *pmf_list) {
+	uint32_t block_idx, line_idx;
+	struct line_t *line;
+
+	for (block_idx = 0; block_idx < info->block_count; ++block_idx) {
+		for (line = 0; line < info->blocks[block_idx].count; ++line) {
+			line = &info->blocks[block_idx].lines[line_idx];
+			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line->data[0]);
+			for (column = 1; column < info->columns; ++column) {
+				pmf_increment(get_cond_pmf(pmf_list, column, line->data[column-1]));
+			}
+		}
+	}
+}
 
 // Legacy stuff for the current version; this should be updated as things are implemented
 // using the new C-based calculations
