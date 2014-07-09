@@ -12,7 +12,7 @@
 struct quantizer_t *alloc_quantizer(const struct alphabet_t *alphabet) {
 	struct quantizer_t *rtn = (struct quantizer_t *) calloc(1, sizeof(struct quantizer_t));
 	rtn->alphabet = alphabet;
-	rtn->q = (uint8_t *) calloc(alphabet->size, sizeof(uint8_t));
+	rtn->q = (symbol_t *) calloc(alphabet->size, sizeof(symbol_t));
 	return rtn;
 }
 
@@ -29,15 +29,15 @@ void free_quantizer(struct quantizer_t *q) {
  * optionally computes the expected distortion produced by this quantizer.
  * The bounds array here contains the left endpoint (inclusive) of each region
  */
-struct quantizer_t *generate_quantizer(struct pmf_t *pmf, struct distortion_t *dist, uint8_t states, double *dist_out) {
+struct quantizer_t *generate_quantizer(struct pmf_t *pmf, struct distortion_t *dist, uint32_t states, double *dist_out) {
 	struct quantizer_t *q = alloc_quantizer(pmf->alphabet);
-	uint8_t changed = 1;
+	uint32_t changed = 1;
 	uint32_t iter = 0;
-	uint8_t i, j, r, size;
-	uint8_t min_r;
+	uint32_t i, j, r, size;
+	uint32_t min_r;
 	double mse, min_mse, next_mse;
-	uint8_t *bounds = (uint8_t *) _alloca((states+1)*sizeof(uint8_t));
-	uint8_t *reconstruction = (uint8_t *) _alloca(states*sizeof(uint8_t));
+	symbol_t *bounds = (symbol_t *) _alloca((states+1)*sizeof(symbol_t));
+	symbol_t *reconstruction = (symbol_t *) _alloca(states*sizeof(symbol_t));
 
 	// Initial bounds and reconstruction points
 	bounds[0] = 0;
@@ -137,7 +137,7 @@ struct quantizer_t *generate_quantizer(struct pmf_t *pmf, struct distortion_t *d
  * same
  */
 void apply_quantizer(struct quantizer_t *q, struct pmf_t *restrict pmf, struct pmf_t *restrict output) {
-	uint8_t i;
+	uint32_t i;
 
 	if (!pmf->pmf_ready)
 		recalculate_pmf(pmf);
@@ -156,12 +156,12 @@ void apply_quantizer(struct quantizer_t *q, struct pmf_t *restrict pmf, struct p
  * Print a quantizer to stdout
  */
 void print_quantizer(struct quantizer_t *q) {
-	uint8_t i;
-	uint8_t *tmp = (uint8_t *) _alloca(q->alphabet->size+1);
+	uint32_t i;
+	char *tmp = (char *) _alloca(q->alphabet->size+1);
 	tmp[q->alphabet->size] = 0;
 
 	for (i = 0; i < q->alphabet->size; ++i) {
-		tmp[i] = q->q[i] + 33;
+		tmp[i] = (char) (q->q[i] + 33);
 	}
 
 	printf("Quantizer: %s\n", tmp);

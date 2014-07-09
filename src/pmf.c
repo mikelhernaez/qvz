@@ -9,11 +9,11 @@
  * Allocates the memory for an alphabet structure and fills the symbols
  * with a default list of 0 through size-1
  */
-struct alphabet_t *alloc_alphabet(uint8_t size) {
-	uint8_t i;
+struct alphabet_t *alloc_alphabet(uint32_t size) {
+	symbol_t i;
 	struct alphabet_t *rtn = (struct alphabet_t *) calloc(1, sizeof(struct alphabet_t));
 	rtn->size = size;
-	rtn->symbols = (uint8_t *) calloc(size, sizeof(uint8_t));
+	rtn->symbols = (symbol_t *) calloc(size, sizeof(symbol_t));
 
 	for (i = 0; i < size; ++i) {
 		rtn->symbols[i] = i;
@@ -52,7 +52,7 @@ void free_pmf(struct pmf_t *pmf) {
  * Gets the probability for a specific location, triggering lazy re-eval if
  * necessary
  */
-double get_probability(struct pmf_t *pmf, uint8_t idx) {
+double get_probability(struct pmf_t *pmf, uint32_t idx) {
 	if (!pmf->pmf_ready)
 		recalculate_pmf(pmf);
 	return pmf->pmf[idx];
@@ -62,8 +62,8 @@ double get_probability(struct pmf_t *pmf, uint8_t idx) {
  * Gets the probability for a specific symbol, triggering lazy re-eval if
  * necessary
  */
-double get_symbol_probability(struct pmf_t *pmf, uint8_t symbol) {
-	uint8_t idx = get_symbol_index(pmf->alphabet, symbol);
+double get_symbol_probability(struct pmf_t *pmf, symbol_t symbol) {
+	uint32_t idx = get_symbol_index(pmf->alphabet, symbol);
 
 	if (!pmf->pmf_ready)
 		recalculate_pmf(pmf);
@@ -77,7 +77,7 @@ double get_symbol_probability(struct pmf_t *pmf, uint8_t symbol) {
  */
 double get_entropy(struct pmf_t *pmf) {
 	double entropy = 0.0;
-	uint8_t i = 0;
+	uint32_t i = 0;
 
 	if (!pmf->pmf_ready)
 		recalculate_pmf(pmf);
@@ -96,7 +96,7 @@ double get_entropy(struct pmf_t *pmf) {
  */
 double get_kl_divergence(struct pmf_t *p, struct pmf_t *q) {
 	double d = 0.0;
-	uint8_t i;
+	uint32_t i;
 	
 	if (p->alphabet != q->alphabet)
 		return NAN;
@@ -124,7 +124,7 @@ double get_kl_divergence(struct pmf_t *p, struct pmf_t *q) {
  * the empirical distributions do not contain the same number of observations
  */
 struct pmf_t *combine_pmfs(struct pmf_t *a, struct pmf_t *b, double weight_a, double weight_b, struct pmf_t *result) {
-	uint8_t i;
+	uint32_t i;
 
 	if (a->alphabet != b->alphabet || a->alphabet != result->alphabet)
 		return NULL;
@@ -145,7 +145,7 @@ struct pmf_t *combine_pmfs(struct pmf_t *a, struct pmf_t *b, double weight_a, do
  * When counting symbols, this handles incrementing everything for the given
  * index
  */
-void pmf_increment(struct pmf_t *pmf, uint8_t index) {
+void pmf_increment(struct pmf_t *pmf, uint32_t index) {
 	pmf->counts[index] += 1;
 	pmf->total += 1;
 }
@@ -154,7 +154,7 @@ void pmf_increment(struct pmf_t *pmf, uint8_t index) {
  * Recalculates the PMF as a series of doubles from the empirical counts and total
  */
 void recalculate_pmf(struct pmf_t *pmf) {
-	uint8_t i;
+	uint32_t i;
 	for (i = 0; i < pmf->alphabet->size; ++i) {
 		pmf->pmf[i] = ((double) pmf->counts[i]) / pmf->total;
 	}
@@ -165,8 +165,8 @@ void recalculate_pmf(struct pmf_t *pmf) {
  * Looks up the index of a symbol in the given alphabet, which may be useful
  * if the alphabet doesn't start at zero, has gaps, etc.
  */
-uint8_t get_symbol_index(const struct alphabet_t *alphabet, uint8_t symbol) {
-	uint8_t idx;
+uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol) {
+	uint32_t idx;
 	for (idx = 0; idx < alphabet->size; ++idx) {
 		if (alphabet->symbols[idx] == symbol)
 			return idx;
@@ -178,7 +178,7 @@ uint8_t get_symbol_index(const struct alphabet_t *alphabet, uint8_t symbol) {
  * Displays an alphabet as "(index): 'character' <number>" one per line
  */
 void print_alphabet(const struct alphabet_t *alphabet) {
-	uint8_t i;
+	uint32_t i;
 	for (i = 0; i < alphabet->size; ++i) {
 		printf("(%d): '%c' <%d>\n", i, alphabet->symbols[i], alphabet->symbols[i]);
 	}
@@ -188,7 +188,7 @@ void print_alphabet(const struct alphabet_t *alphabet) {
  * Displays a PMF
  */
 void print_pmf(struct pmf_t *pmf) {
-	uint8_t i;
+	uint32_t i;
 
 	if (!pmf->pmf_ready)
 		recalculate_pmf(pmf);
