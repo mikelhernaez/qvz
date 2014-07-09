@@ -162,6 +162,22 @@ void recalculate_pmf(struct pmf_t *pmf) {
 }
 
 /**
+ * Converts a PMF that is stored as a series of doubles back to the counts representation,
+ * or alternatively this can be viewed as quantizing it into a fixed point representation in
+ * 0.m format
+ */
+void pmf_to_counts(struct pmf_t *pmf, uint32_t m) {
+	uint32_t i;
+	double scale = ((1 << m) - 1);
+
+	pmf->total = 0;
+	for (i = 0; i < pmf->alphabet->size; ++i) {
+		pmf->counts[i] = (uint32_t) (pmf->counts[i] * scale);
+		pmf->total += pmf->counts[i];
+	}
+}
+
+/**
  * Looks up the index of a symbol in the given alphabet, which may be useful
  * if the alphabet doesn't start at zero, has gaps, etc.
  */

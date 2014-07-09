@@ -29,7 +29,7 @@ void free_quantizer(struct quantizer_t *q) {
  * optionally computes the expected distortion produced by this quantizer.
  * The bounds array here contains the left endpoint (inclusive) of each region
  */
-struct quantizer_t *generate_quantizer(struct pmf_t *pmf, struct distortion_t *dist, uint32_t states, double *dist_out) {
+struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states, double *restrict dist_out) {
 	struct quantizer_t *q = alloc_quantizer(pmf->alphabet);
 	uint32_t changed = 1;
 	uint32_t iter = 0;
@@ -114,7 +114,7 @@ struct quantizer_t *generate_quantizer(struct pmf_t *pmf, struct distortion_t *d
 	}
 
 	// Save the output alphabet in the quantizer
-	// TODO:
+	// TODO: Do we really need to do this? Maybe...
 
 	// If requested, calculate the expected distortion for the final assignment
 	// and return it to the caller
@@ -136,7 +136,7 @@ struct quantizer_t *generate_quantizer(struct pmf_t *pmf, struct distortion_t *d
  * from the given input distribution. The input and output pmf structures cannot be the
  * same
  */
-void apply_quantizer(struct quantizer_t *q, struct pmf_t *restrict pmf, struct pmf_t *restrict output) {
+void apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_t *restrict output) {
 	uint32_t i;
 
 	if (!pmf->pmf_ready)

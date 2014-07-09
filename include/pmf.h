@@ -4,9 +4,10 @@
 #include <stdint.h>
 
 // Used to indicate a symbol not found during index lookup
-#define ALPHABET_SYMBOL_NOT_FOUND			255
+#define ALPHABET_SYMBOL_NOT_FOUND			UINT32_MAX
 
-typedef symbol_t uint32_t;
+// Unfortunately this is a bit brittle so don't change it
+typedef symbol_t uint8_t;
 
 /**
  * Structure that stores information about an alphabet including
@@ -47,6 +48,7 @@ double get_kl_divergence(struct pmf_t *p, struct pmf_t *q);
 struct pmf_t *combine_pmfs(struct pmf_t *a, struct pmf_t *b, double weight_a, double weight_b, struct pmf_t *result);
 void pmf_increment(struct pmf_t *pmf, uint32_t index);
 void recalculate_pmf(struct pmf_t *);
+void pmf_to_counts(struct pmf_t *pmf, uint32_t m);
 
 // Alphabet search
 uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol);
