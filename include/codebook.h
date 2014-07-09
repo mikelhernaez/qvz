@@ -15,6 +15,7 @@
 #include "well.h"
 #include "pmf.h"
 #include "distortion.h"
+#include "util.h"
 
 /**
  * Stores an array of conditional PMFs for the current column given the previous

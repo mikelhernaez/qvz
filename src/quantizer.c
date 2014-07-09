@@ -28,6 +28,7 @@ void free_quantizer(struct quantizer_t *q) {
  * Produce a quantizer with the given number of states for the given pmf, and
  * optionally computes the expected distortion produced by this quantizer.
  * The bounds array here contains the left endpoint (inclusive) of each region
+ * TODO: Remove reconstruction variable, store directly in output alphabet
  */
 struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states, double *restrict dist_out) {
 	struct quantizer_t *q = alloc_quantizer(pmf->alphabet);
@@ -114,7 +115,10 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 	}
 
 	// Save the output alphabet in the quantizer
-	// TODO: Do we really need to do this? Maybe...
+	q->output_alphabet = alloc_alphabet(states);
+	for (j = 0; j < states; ++j) {
+		q->output_alphabet[j] = reconstruction[j];
+	}
 
 	// If requested, calculate the expected distortion for the final assignment
 	// and return it to the caller
@@ -158,12 +162,16 @@ void apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *restrict pmf,
 void print_quantizer(struct quantizer_t *q) {
 	uint32_t i;
 	char *tmp = (char *) _alloca(q->alphabet->size+1);
-	tmp[q->alphabet->size] = 0;
 
+	tmp[q->alphabet->size] = 0;
 	for (i = 0; i < q->alphabet->size; ++i) {
 		tmp[i] = (char) (q->q[i] + 33);
 	}
-
 	printf("Quantizer: %s\n", tmp);
-	// TODO: Print unique output alphabet
+
+	tmp[q->output_alphabet->size] = 0;
+	for (i = 0; i < q->output_alphabet_size; ++i) {
+		tmp[i] = (char) (q->output_alphabet[i] + 33);
+	}
+	printf("Unique alphabet: %s\n", tmp);
 }

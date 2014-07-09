@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
+
 #include "pmf.h"
 
 // This limits us to chunks that aren't too big to fit into a modest amount of memory at a time

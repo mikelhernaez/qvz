@@ -53,6 +53,7 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 	// Process the file
 	block_idx = 0;
 	line_idx = 0;
+	fseek(fp, 0, SEEK_SET);
 	while (!feof(fp)) {
 		// Read line and store in our array with data conversion, also stripping newlines
 		fgets(line, 1024, fp);
@@ -68,6 +69,7 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 		}
 	}
 
+	fclose(fp);
 	return LF_ERROR_NONE;
 }
 
@@ -107,7 +109,7 @@ uint32_t allocate_blocks(struct quality_file_t *info) {
 			cblock->count = lines_left;
 		}
 
-		// Allocate symbol buffer and array of line info structs
+		// Allocate symbol buffer and array of line info structs for the block
 		sym_buf = (symbol_t *) calloc(cblock->count, info->columns*sizeof(symbol_t));
 		cblock->lines = (struct line_t *) calloc(cblock->count, sizeof(struct line_t));
 		cline = cblock->lines;
