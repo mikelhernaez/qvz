@@ -191,6 +191,45 @@ uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol) {
 }
 
 /**
+ * Finds the unique set of symbols across both input alphabets and creates an
+ * output alphabet
+ */
+void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, const struct alphabet_t *restrict result) {
+	uint32_t size;
+	symbol_t *sym = (symbol_t *) _alloca((a->size+b->size)*sizeof(symbol_t));
+	uint32_t i = 0;
+	uint32_t j = 0;
+	uint32_t k = 0;
+
+	// Combine with a merge algorithm since alphabets are required to be sorted
+	while (i < a->size && j < b->size) {
+		if (a->symbols[i] < b->symbols[j]) {
+			sym[k] = a->symbols[i];
+			i += 1;
+		}
+		else if (a->symbols[i] == b->symbols[j]) {
+			sym[k] = a->symbols[i];
+			i += 1;
+			j += 1;
+		}
+		else {
+			sym[k] = b->symbols[j];
+			j += 1;
+		}
+		k += 1;
+	}
+
+	// If we already have an output array, replace it with a new one
+	if (result->symbols)
+		free(result->symbols);
+	result->symbols = (symbol_t *) calloc(k, sizeof(symbol_t));
+
+	// Copy over temporary data
+	memcpy(result->symbols, sym, k*sizeof(symbol_t));
+	result->size = k;
+}
+
+/**
  * Displays an alphabet as "(index): 'character' <number>" one per line
  */
 void print_alphabet(const struct alphabet_t *alphabet) {

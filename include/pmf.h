@@ -53,6 +53,9 @@ void pmf_to_counts(struct pmf_t *pmf, uint32_t m);
 // Alphabet search
 uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol);
 
+// Compute the union of two alphabets
+void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, struct alphabet_t *restrict result);
+
 // Display routines
 void print_alphabet(const struct alphabet_t *);
 void print_pmf(struct pmf_t *);
