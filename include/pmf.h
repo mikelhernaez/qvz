@@ -49,6 +49,7 @@ void free_pmf(struct pmf_t *);
 void free_pmf_list(struct pmf_list_t *);
 
 // PMF access
+uint32_t is_pmf_valid(struct pmf_t *);
 uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol);
 double get_probability(struct pmf_t *pmf, uint32_t idx);
 double get_symbol_probability(struct pmf_t *pmf, symbol_t symbol);
@@ -62,10 +63,11 @@ void recalculate_pmf(struct pmf_t *);
 void pmf_to_counts(struct pmf_t *pmf, uint32_t m);
 
 // Alphabet search
+uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol);
 uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol);
 
 // Compute the union of two alphabets
-void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, struct alphabet_t *restrict result);
+void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, struct alphabet_t *result);
 
 // Display routines
 void print_alphabet(const struct alphabet_t *);

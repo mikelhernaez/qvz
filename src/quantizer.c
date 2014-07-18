@@ -138,22 +138,30 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 /**
  * Calculate the PMF of the output when the given quantizer is used with symbols generated
  * from the given input distribution. The input and output pmf structures cannot be the
- * same
+ * same. If output is null, a new PMF will be allocated and a pointer returned
  */
-void apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_t *restrict output) {
+struct pmf_t *apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_t *restrict output) {
 	uint32_t i;
 
 	if (!pmf->pmf_ready)
 		recalculate_pmf(pmf);
-
-	// Clear existing pmf from output
-	memset(output->pmf, 0, output->alphabet->size * sizeof(double));
+	
+	if (output) {
+		// Clear existing pmf from output
+		memset(output->pmf, 0, output->alphabet->size * sizeof(double));
+	}
+	else {
+		// Allocate a new PMF for output
+		output = alloc_pmf(pmf->alphabet);
+	}
 
 	// Sum together input probabilities that map to the same output
 	for (i = 0; i < pmf->alphabet->size; ++i) {
 		output[q->q[i]] += get_probability(pmf, i);
 	}
 	output->pmf_ready = 1;
+
+	return output;
 }
 
 /**

@@ -29,16 +29,37 @@ struct cond_pmf_list_t {
 };
 
 /**
- * For all columns, store the relevant PMFs (regular or conditional), the quantizers,
- * the PMFs describing quantizer outputs
+ * Stores an array of quantizer pointers for the column for all possible left context
+ * values. Unused ones are left as null pointers. This is also stored as a flat array
+ * so the accessor must be used to look up the correct quantizer
+ * The dreaded triple pointer is used to store an array of (different length) arrays
+ * of pointers to quantizers
  */
+struct cond_quantizer_list_t {
+	uint32_t columns;
+	const struct alphabet_t **input_alphabets;
+	struct quantizer_t ***q;
+};
 
 // Memory management
 struct cond_pmf_list_t *alloc_conditional_pmf_list(const struct alphabet_t *alphabet, uint32_t columns);
+struct cond_quantizer_list_t *alloc_conditional_quantizer_list(uint32_t columns);
 void free_cond_pmf_list(struct cond_pmf_list_t *);
+void free_cond_quantizer_list(struct cond_quantizer_list_t *);
+
+// Per-column initializer for conditional quantizer list
+void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t column, const struct alphabet_t *input_union);
 
 // Accessors
 struct pmf_t *get_cond_pmf(struct cond_pmf_list_t *list, uint32_t column, symbol_t prev);
+struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
+struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
+void store_cond_quantizer(struct cond_quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
+
+// Meat of the implementation
+void calculate_statistics(struct quality_info_t *, struct cond_pmf_list_t *);
+void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double **high, double **low, double **ratio);
+struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp);
 
 // Legacy stuff to be converted still
 

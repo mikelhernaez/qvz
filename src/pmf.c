@@ -88,6 +88,23 @@ void free_pmf_list(struct pmf_list_t *pmfs) {
 }
 
 /**
+ * Determine if a pmf is valid (if it sums to 1, within some tolerance)
+ */
+uint32_t is_pmf_valid(struct pmf_t *pmf) {
+	double sum = 0;
+	uint32_t i;
+
+	if (!pmf->pmf_ready)
+		recalculate_pmf(pmf);
+
+	for (i = 0; i < pmf->alphabet->size; ++i) {
+		sum += pmf->pmf[i];
+	}
+
+	return (abs(sum - 1) < 0.0001) ? 1 : 0;
+}
+
+/**
  * Gets the probability for a specific location, triggering lazy re-eval if
  * necessary
  */
@@ -222,6 +239,18 @@ void pmf_to_counts(struct pmf_t *pmf, uint32_t m) {
 }
 
 /**
+ * Determines if the given alphabet contains the given symbol
+ */
+uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol) {
+	uint32_t idx;
+	for (idx = 0; idx < alphabet->size; ++idx) {
+		if (alphabet->symbols[idx] == symbol)
+			return 1;
+	}
+	return 0;
+}
+
+/**
  * Looks up the index of a symbol in the given alphabet, which may be useful
  * if the alphabet doesn't start at zero, has gaps, etc.
  */
@@ -238,7 +267,7 @@ uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol) {
  * Finds the unique set of symbols across both input alphabets and creates an
  * output alphabet
  */
-void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, const struct alphabet_t *restrict result) {
+void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, const struct alphabet_t *result) {
 	uint32_t size;
 	symbol_t *sym = (symbol_t *) _alloca((a->size+b->size)*sizeof(symbol_t));
 	uint32_t i = 0;
