@@ -31,11 +31,22 @@ struct pmf_t {
 	uint32_t total;
 };
 
+/**
+ * Stores a list of PMFs, used to track sets of conditional PMFs
+ */
+struct pmf_list_t {
+	uint32_t size;
+	struct pmf_t **pmfs;
+};
+
 // Memory management functions
 struct alphabet_t *alloc_alphabet(uint32_t size);
+struct alphabet_t *duplicate_alphabet(const struct alphabet_t *);
 struct pmf_t *alloc_pmf(const struct alphabet_t *);
+struct pmf_list_t *alloc_pmf_list(uint32_t size, const struct alphabet_t *alphabet);
 void free_alphabet(struct alphabet_t *);
 void free_pmf(struct pmf_t *);
+void free_pmf_list(struct pmf_list_t *);
 
 // PMF access
 uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol);

@@ -22,6 +22,17 @@ struct alphabet_t *alloc_alphabet(uint32_t size) {
 }
 
 /**
+ * Makes a copy of the given alphabet
+ */
+struct alphabet_t *duplicate_alphabet(const struct alphabet_t *a) {
+	struct alphabet_t *rtn = (struct alphabet_t *) calloc(1, sizeof(struct alphabet_t));
+	rtn->size = a->size;
+	rtn->symbols = (symbol_t *) calloc(a->size, sizeof(symbol_t));
+	memcpy(rtn->symbols, a->symbols, a->size*sizeof(symbol_t));
+	return rtn;
+}
+
+/**
  * Allocates a PMF structure for the given alphabet, but it does not copy the alphabet
  */
 struct pmf_t *alloc_pmf(const struct alphabet_t *alphabet) {
@@ -29,6 +40,22 @@ struct pmf_t *alloc_pmf(const struct alphabet_t *alphabet) {
 	rtn->alphabet = alphabet;
 	rtn->pmf = (double *) calloc(alphabet->size, sizeof(double));
 	rtn->counts = (uint32_t *) calloc(alphabet->size, sizeof(uint32_t));
+	return rtn;
+}
+
+/**
+ * Allocates an array for tracking a list of PMFs along with the underlying PMFs
+ */
+struct pmf_list_t *alloc_pmf_list(uint32_t size, const struct alphabet_t *alphabet) {
+	uint32_t i;
+	struct pmf_list_t *rtn = (struct pmf_list_t *) calloc(1, sizeof(struct pmf_list_t));
+	rtn->size = size;
+	rtn->pmfs = (struct pmf_t **) calloc(size, sizeof(struct pmf_t *));
+	
+	for (i = 0; i < size; ++i) {
+		rtn->pmfs[i] = alloc_pmf(alphabet);
+	}
+
 	return rtn;
 }
 
@@ -46,6 +73,18 @@ void free_alphabet(struct alphabet_t *alphabet) {
 void free_pmf(struct pmf_t *pmf) {
 	free(pmf->counts);
 	free(pmf);
+}
+
+/**
+ * Frees a list of PMFs
+ */
+void free_pmf_list(struct pmf_list_t *pmfs) {
+	uint32_t i;
+	for (i = 0; i < pmfs->size; ++i) {
+		free(pmfs->pmfs[i]);
+	}
+	free(pmfs->pmfs);
+	free(pmfs);
 }
 
 /**
@@ -155,10 +194,15 @@ void pmf_increment(struct pmf_t *pmf, uint32_t index) {
  */
 void recalculate_pmf(struct pmf_t *pmf) {
 	uint32_t i;
-	for (i = 0; i < pmf->alphabet->size; ++i) {
-		pmf->pmf[i] = ((double) pmf->counts[i]) / pmf->total;
-	}
+	double total = (double) pmf->total;
+
 	pmf->pmf_ready = 1;
+	if (pmf->total == 0)
+		return;
+	
+	for (i = 0; i < pmf->alphabet->size; ++i) {
+		pmf->pmf[i] = ((double) pmf->counts[i]) / total;
+	}
 }
 
 /**

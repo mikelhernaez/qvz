@@ -14,9 +14,9 @@
  * to output symbols for a specific alphabet
  */
 struct quantizer_t {
-	const struct alphabet_t *alphabet;
-	struct alphabet_t *output_alphabet;
-	symbol_t *q;
+	const struct alphabet_t *restrict alphabet;
+	struct alphabet_t *restrict output_alphabet;
+	symbol_t *restrict q;
 };
 
 // Memory management
