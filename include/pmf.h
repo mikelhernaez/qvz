@@ -61,6 +61,8 @@ struct pmf_t *combine_pmfs(struct pmf_t *a, struct pmf_t *b, double weight_a, do
 void pmf_increment(struct pmf_t *pmf, uint32_t index);
 void recalculate_pmf(struct pmf_t *);
 void pmf_to_counts(struct pmf_t *pmf, uint32_t m);
+void clear_pmf(struct pmf_t *);
+void clear_pmf_list(struct pmf_list_t *);
 
 // Alphabet search
 uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol);

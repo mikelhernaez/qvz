@@ -146,10 +146,45 @@ void calculate_statistics(struct quality_info_t *info, struct cond_pmf_list_t *p
  * Calculates the integer number of states to use for each column according to the estimate
  * of conditional entropy from the baseline statistics
  */
-void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double **high, double **low, double **ratio) {
+void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double **high, double **low, double **ratio, uint32_t mode) {
 	*high = (double *) calloc(pmf_list->columns, sizeof(double));
 	*low = (double *) calloc(pmf_list->columns, sizeof(double));
 	*ratio = (double *) calloc(pmf_list->columns, sizeof(double));
+	double *entropies = (double *) _alloca(pmf_list->columns*sizeof(double));
+	uint32_t i, j;
+	struct pmf_list_t *uc_pmf_list = alloc_pmf_list(pmf_list->columns, pmf_list->alphabet);
+	struct pmf_t *pmf_temp;
+
+	// Column 0 pmf is the unconditional one, copy it to the unconditional pmf list
+	pmf_temp = get_cond_pmf(pmf_list, 0, 0);
+	combine_pmfs(pmf_temp, pmf_temp, 1.0, 0.0, &uc_pmf_list->pmfs[0]);
+
+	// Find unconditional pmfs for each column remaining
+	for (i = 1; i < pmf_list->columns; ++i) {
+		for (j = 0; j < pmf_list->alphabet->size; ++j) {
+			pmf_temp = get_cond_pmf(pmf_list, i, j);
+			combine_pmfs(&uc_pmf_list->pmfs[i], pmf_temp, 1.0, get_probability(&uc_pmf_list->pmfs[i-1], j), &uc_pmf_list->pmfs[i]);
+		}
+	}
+
+	// Alloca doesn't zero memory for us
+	memset(entropies, 0, pmf_list->columns*sizeof(double));
+
+	// Column 0 is handled specially because it only has one left context
+	entropies[0] = get_entropy(get_cond_pmf(pmf_list, 0, 0));
+
+	// Rest of the columns are handled identically
+	for (i = 1; i < pmf_list->columns; ++i) {
+		pmf_temp = &uc_pmf_list->pmfs[i-1];
+		for (j = 0; j < pmf_list->alphabet->size; ++j) {
+			entropies[i] += get_probability(pmf_temp, j) * get_entropy(get_cond_pmf(pmf_list, i, j));
+		}
+	}
+
+	// Compute number of states used based on mode parameter
+	// TODO: Do state assignment calculation
+
+	free_pmf_list(uc_pmf_list);
 }
 
 /**
@@ -157,7 +192,7 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double *
  * quantizers, as well as all of the PMFs and related stats
  * TODO: Add hi states to generation
  */
-struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp) {
+struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode) {
 	// Stuff for state allocation and mixing
 	double *hi_states, *lo_states, *state_ratio;
 
@@ -195,7 +230,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 	// First we need to know what our training stats are and figure out how many states
 	// to put into each quantizer
 	calculate_statistics(info, in_pmfs);
-	find_bit_allocation(pmf_list, comp, &hi_states, &lo_states, &state_ratio);
+	find_bit_allocation(pmf_list, comp, &hi_states, &lo_states, &state_ratio, mode);
 
 	// For the first column, quantizer isn't conditional, so find it directly
 	q_temp = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo_states[0], NULL);
@@ -313,9 +348,9 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 		}
 		free(cq_pmf_list);
 
-		free(q_pmf);
+		free_pmf(q_pmf);
 		q_pmf = next_q_pmf;
-		free(q_alphabet);
+		free_alphabet(q_alphabet);
 		q_alphabet = next_q_alphabet;
 	}
 

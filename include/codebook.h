@@ -17,6 +17,11 @@
 #include "distortion.h"
 #include "util.h"
 
+// Modes for bit allocation
+#define BIT_ALLOC_MODE_INT_STATES		1			// Uses floor(2^H)/ceil(2^H)
+#define BIT_ALLOC_MODE_INT_POWER		2			// Uses 2^floor(H)/2^ceil(H)
+#define BIT_ALLOC_MODE_NO_MIX			3			// Uses only floor(2^H)
+
 /**
  * Stores an array of conditional PMFs for the current column given the previous
  * column. PMF pointers are stored in a flat array so don't try to find the PMF you
@@ -58,8 +63,8 @@ void store_cond_quantizer(struct cond_quantizer_t *q, struct cond_quantizer_list
 
 // Meat of the implementation
 void calculate_statistics(struct quality_info_t *, struct cond_pmf_list_t *);
-void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double **high, double **low, double **ratio);
-struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp);
+void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double **high, double **low, double **ratio, uint32_t mode);
+struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode);
 
 // Legacy stuff to be converted still
 

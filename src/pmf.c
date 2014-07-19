@@ -239,6 +239,28 @@ void pmf_to_counts(struct pmf_t *pmf, uint32_t m) {
 }
 
 /**
+ * Zeros out the counts and probabilities for a PMF to let us reuse the same memory allocation
+ */
+void clear_pmf(struct pmf_t *pmf) {
+	uint32_t i;
+	memset(pmf->counts, 0, pmf->alphabet->size * sizeof(uint32_t));
+	memset(pmf->pmf, 0, pmf->alphabet->size * sizeof(double));
+	pmf->pmf_ready = 0;
+	pmf->total = 0;
+}
+
+/**
+ * Zeros out every pmf in the given list, so we can reuse the entire pmf list without
+ * deallocating/reallocating memory
+ */
+void clear_pmf_list(struct pmf_list_t *list) {
+	uint32_t i;
+	for (i = 0; i < list->size; ++i) {
+		clear_pmf(list->pmfs[i]);
+	}
+}
+
+/**
  * Determines if the given alphabet contains the given symbol
  */
 uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol) {
