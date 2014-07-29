@@ -151,6 +151,7 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double *
 	*low = (double *) calloc(pmf_list->columns, sizeof(double));
 	*ratio = (double *) calloc(pmf_list->columns, sizeof(double));
 	double *entropies = (double *) _alloca(pmf_list->columns*sizeof(double));
+	double h_lo, h_hi;
 	uint32_t i, j;
 	struct pmf_list_t *uc_pmf_list = alloc_pmf_list(pmf_list->columns, pmf_list->alphabet);
 	struct pmf_t *pmf_temp;
@@ -182,7 +183,35 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double *
 	}
 
 	// Compute number of states used based on mode parameter
-	// TODO: Do state assignment calculation
+	// r = ratio:
+	// H = rH_lo + (1-r)H_hi
+	// H - H_hi = r(H_lo - H_hi)
+	// r = (H - H_hi) / (H_lo - H_hi)
+	for (i = 0; i < pmf_list->columns; ++i) {
+		switch(mode) {
+			case BIT_ALLOC_MODE_INT_STATES:
+				h_lo = pow(2, entropies[i]);
+				low[i] = floor(h_lo);
+				high[i] = ceil(h_lo);
+				h_lo = log2(low[i]);
+				h_hi = log2(high[i]);
+				ratio[i] = (entropies[i] - h_hi) / (h_lo - h_hi);
+				break;
+			case BIT_ALLOC_MODE_INT_POWER:
+				h_lo = floor(entropies[i]);
+				h_hi = ceil(entropies[i]);
+				low[i] = pow(2, h_lo);
+				high[i] = pow(2, h_hi);
+				ratio[i] = (entropies[i] - h_hi) / (h_lo - h_hi);
+				break;
+			case BIT_ALLOC_MODE_NO_MIX:
+			default:
+				ratio[i] = 1;
+				low[i] = floor(pow(2, entropies[i]));
+				high[i] = 0.0;
+				break;
+		}
+	}
 
 	free_pmf_list(uc_pmf_list);
 }
