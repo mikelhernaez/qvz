@@ -1,9 +1,6 @@
-#include <math.h>
-#include <stdlib.h>
 #include <stdio.h>
 
 #include "pmf.h"
-#include "util.h"
 
 /**
  * Allocates the memory for an alphabet structure and fills the symbols
@@ -81,7 +78,7 @@ void free_pmf(struct pmf_t *pmf) {
 void free_pmf_list(struct pmf_list_t *pmfs) {
 	uint32_t i;
 	for (i = 0; i < pmfs->size; ++i) {
-		free(pmfs->pmfs[i]);
+		free_pmf(pmfs->pmfs[i]);
 	}
 	free(pmfs->pmfs);
 	free(pmfs);
@@ -101,7 +98,9 @@ uint32_t is_pmf_valid(struct pmf_t *pmf) {
 		sum += pmf->pmf[i];
 	}
 
-	return (abs(sum - 1) < 0.0001) ? 1 : 0;
+	if (fabs(sum - 1.0) < 0.0001)
+		return 1;
+	return 0;
 }
 
 /**
@@ -242,7 +241,6 @@ void pmf_to_counts(struct pmf_t *pmf, uint32_t m) {
  * Zeros out the counts and probabilities for a PMF to let us reuse the same memory allocation
  */
 void clear_pmf(struct pmf_t *pmf) {
-	uint32_t i;
 	memset(pmf->counts, 0, pmf->alphabet->size * sizeof(uint32_t));
 	memset(pmf->pmf, 0, pmf->alphabet->size * sizeof(double));
 	pmf->pmf_ready = 0;
@@ -289,8 +287,7 @@ uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol) {
  * Finds the unique set of symbols across both input alphabets and creates an
  * output alphabet
  */
-void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, const struct alphabet_t *result) {
-	uint32_t size;
+void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, struct alphabet_t *result) {
 	symbol_t *sym = (symbol_t *) _alloca((a->size+b->size)*sizeof(symbol_t));
 	uint32_t i = 0;
 	uint32_t j = 0;

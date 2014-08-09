@@ -3,8 +3,11 @@
  * and converting between the different formats we use
  */
 
-#include "lines.h"
 #include "util.h"
+
+#include <stdio.h>
+
+#include "lines.h"
 
 /**
  * This reads data from the given file pointer into memory, breaking it into segments
@@ -23,7 +26,7 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 	struct _stat finfo;
 
 	// Load metadata into the info structure
-	strdup(info->path, path);
+	info->path = strdup(path);
 	fp = fopen(path, "rt");
 	if (!fp) {
 		return LF_ERROR_NOT_FOUND;
@@ -57,13 +60,13 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 	while (!feof(fp)) {
 		// Read line and store in our array with data conversion, also stripping newlines
 		fgets(line, 1024, fp);
-		for (j = 0; j < info->columns: ++j) {
-			info->blocks[block_idx]->lines[line_idx]->data[j] = line[j] - 33;
+		for (j = 0; j < info->columns; ++j) {
+			info->blocks[block_idx].lines[line_idx].data[j] = line[j] - 33;
 		}
 
 		// Increment line/block pointers as necesary
 		line_idx += 1;
-		if (line_idx == info->blocks[block_idx]->count) {
+		if (line_idx == info->blocks[block_idx].count) {
 			line_idx = 0;
 			block_idx += 1;
 		}
@@ -79,15 +82,13 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
  */
 uint32_t allocate_blocks(struct quality_file_t *info) {
 	uint64_t lines_left = info->lines;
-	struct line_t *line_buf;
 	symbol_t *sym_buf;
 	struct line_block_t *cblock;
 	struct line_t *cline;
-	uint32_t alloc_lines;
 	uint32_t i;
 
 	// Figure out how many blocks we'll need to store this file
-	info->block_count = info->lines / MAX_LINES_PER_BLOCK;
+	info->block_count = (uint32_t) (info->lines / (uint64_t)MAX_LINES_PER_BLOCK);
 	if (info->block_count * MAX_LINES_PER_BLOCK != info->lines) {
 		info->block_count += 1;
 	}
@@ -105,8 +106,8 @@ uint32_t allocate_blocks(struct quality_file_t *info) {
 			cblock->count = MAX_LINES_PER_BLOCK;
 		}
 		else {
+			cblock->count = (uint32_t) lines_left;
 			lines_left = 0;
-			cblock->count = lines_left;
 		}
 
 		// Allocate symbol buffer and array of line info structs for the block
@@ -140,8 +141,8 @@ void free_blocks(struct quality_file_t *info) {
 
 	uint32_t i;
 	for (i = 0; i < info->block_count; ++i) {
-		free(info->blocks[i]->lines[0]->data);
-		free(info->blocks[i]->lines);
+		free(info->blocks[i].lines[0].data);
+		free(info->blocks[i].lines);
 	}
 	free(info->blocks);
 }

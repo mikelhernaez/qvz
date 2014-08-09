@@ -1,7 +1,4 @@
-#include <stdlib.h>
 #include <stdio.h>
-#include <malloc.h>
-#include <float.h>
 
 #include "quantizer.h"
 #include "util.h"
@@ -117,7 +114,7 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 	// Save the output alphabet in the quantizer
 	q->output_alphabet = alloc_alphabet(states);
 	for (j = 0; j < states; ++j) {
-		q->output_alphabet[j] = reconstruction[j];
+		q->output_alphabet->symbols[j] = reconstruction[j];
 	}
 
 	// If requested, calculate the expected distortion for the final assignment
@@ -157,7 +154,7 @@ struct pmf_t *apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *rest
 
 	// Sum together input probabilities that map to the same output
 	for (i = 0; i < pmf->alphabet->size; ++i) {
-		output[q->q[i]] += get_probability(pmf, i);
+		output->pmf[q->q[i]] += get_probability(pmf, i);
 	}
 	output->pmf_ready = 1;
 
@@ -178,8 +175,8 @@ void print_quantizer(struct quantizer_t *q) {
 	printf("Quantizer: %s\n", tmp);
 
 	tmp[q->output_alphabet->size] = 0;
-	for (i = 0; i < q->output_alphabet_size; ++i) {
-		tmp[i] = (char) (q->output_alphabet[i] + 33);
+	for (i = 0; i < q->output_alphabet->size; ++i) {
+		tmp[i] = (char) (q->output_alphabet->symbols[i] + 33);
 	}
 	printf("Unique alphabet: %s\n", tmp);
 }

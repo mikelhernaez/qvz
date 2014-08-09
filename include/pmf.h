@@ -3,11 +3,13 @@
 
 #include <stdint.h>
 
+#include "util.h"
+
 // Used to indicate a symbol not found during index lookup
 #define ALPHABET_SYMBOL_NOT_FOUND			UINT32_MAX
 
 // Unfortunately this is a bit brittle so don't change it
-typedef symbol_t uint8_t;
+typedef uint8_t symbol_t;
 
 /**
  * Structure that stores information about an alphabet including

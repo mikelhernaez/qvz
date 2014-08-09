@@ -5,17 +5,14 @@
  * for both the encoder and decoder code
  */
 
-#define _CRT_SECURE_NO_WARNINGS
+#include "util.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 
 #include "well.h"
 #include "pmf.h"
 #include "distortion.h"
-#include "util.h"
+#include "quantizer.h"
 
 // Modes for bit allocation
 #define BIT_ALLOC_MODE_INT_STATES		1			// Uses floor(2^H)/ceil(2^H)
@@ -42,7 +39,7 @@ struct cond_pmf_list_t {
  */
 struct cond_quantizer_list_t {
 	uint32_t columns;
-	const struct alphabet_t **input_alphabets;
+	struct alphabet_t **input_alphabets;
 	struct quantizer_t ***q;
 };
 
@@ -59,12 +56,12 @@ void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t col
 struct pmf_t *get_cond_pmf(struct cond_pmf_list_t *list, uint32_t column, symbol_t prev);
 struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
 struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
-void store_cond_quantizer(struct cond_quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
+void store_cond_quantizer(struct quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 
 // Meat of the implementation
-void calculate_statistics(struct quality_info_t *, struct cond_pmf_list_t *);
-void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double **high, double **low, double **ratio, uint32_t mode);
-struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode);
+void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
+void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t **high, uint32_t **low, double **ratio, uint32_t mode);
+struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode);
 
 // Legacy stuff to be converted still
 

@@ -1,10 +1,7 @@
 #ifndef _LINES_H_
 #define _LINES_H_
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "pmf.h"
 
@@ -45,6 +42,8 @@ struct quality_file_t {
 };
 
 // Memory management
-uint32_t load_file(const char *path, struct quality_file_t *info);
+uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_lines);
+uint32_t allocate_blocks(struct quality_file_t *info);
+void free_blocks(struct quality_file_t *info);
 
 #endif

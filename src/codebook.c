@@ -1,6 +1,7 @@
 #include "codebook.h"
-#include "pmf.h"
 #include "lines.h"
+
+#include <stdio.h>
 
 /**
  * To compute stats for the training data, we will need a set of conditional PMFs, one
@@ -10,6 +11,7 @@
  */
 struct cond_pmf_list_t *alloc_conditional_pmf_list(const struct alphabet_t *alphabet, uint32_t columns) {
 	uint32_t count = 1 + alphabet->size*(columns-1);
+	uint32_t i;
 	struct cond_pmf_list_t *list = (struct cond_pmf_list_t *) calloc(1, sizeof(struct cond_pmf_list_t));
 
 	// We need one array of PMF pointers that will index into the buffer allocated above, for the columns
@@ -59,13 +61,13 @@ struct cond_quantizer_list_t *alloc_conditional_quantizer_list(uint32_t columns)
 void free_cond_quantizer_list(struct cond_quantizer_list_t *list) {
 	uint32_t i, j;
 
-	for (i = 0; i < columns; ++i) {
+	for (i = 0; i < list->columns; ++i) {
 		if (list->q[i]) {
-			for (j = 0; j < list->input_alphabets[i].size; ++i) {
+			for (j = 0; j < list->input_alphabets[i]->size; ++i) {
 				if (list->q[i][j])
-					free_pmf(list->q[i][j]);
+					free_quantizer(list->q[i][j]);
 			}
-			free_alphabet(list->alphabets[i]);
+			free_alphabet(list->input_alphabets[i]);
 			free(list->q[i]);
 		}
 	}
@@ -118,8 +120,8 @@ struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint3
  * Stores the given quantizer at the appropriate index corresponding to the left context symbol given
  * for the specific column
  */
-void store_cond_quantizer(struct cond_quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
-	uint32_t idx = get_symbol_indx(list->input_alphabets, prev);
+void store_cond_quantizer(struct quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
+	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
 	list->q[column][idx] = q;
 }
 
@@ -127,12 +129,12 @@ void store_cond_quantizer(struct cond_quantizer_t *q, struct cond_quantizer_list
  * Given a quality info struct, which is assumed to have loaded the training set, and a
  * set of output conditional pmf structures, calculate the statistics of the data
  */
-void calculate_statistics(struct quality_info_t *info, struct cond_pmf_list_t *pmf_list) {
-	uint32_t block_idx, line_idx;
+void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *pmf_list) {
+	uint32_t block_idx, line_idx, column;
 	struct line_t *line;
 
 	for (block_idx = 0; block_idx < info->block_count; ++block_idx) {
-		for (line = 0; line < info->blocks[block_idx].count; ++line) {
+		for (line_idx = 0; line_idx < info->blocks[block_idx].count; ++line_idx) {
 			line = &info->blocks[block_idx].lines[line_idx];
 			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line->data[0]);
 			for (column = 1; column < info->columns; ++column) {
@@ -146,25 +148,29 @@ void calculate_statistics(struct quality_info_t *info, struct cond_pmf_list_t *p
  * Calculates the integer number of states to use for each column according to the estimate
  * of conditional entropy from the baseline statistics
  */
-void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double **high, double **low, double **ratio, uint32_t mode) {
-	*high = (double *) calloc(pmf_list->columns, sizeof(double));
-	*low = (double *) calloc(pmf_list->columns, sizeof(double));
-	*ratio = (double *) calloc(pmf_list->columns, sizeof(double));
+void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t **high_out, uint32_t **low_out, double **ratio_out, uint32_t mode) {
+	uint32_t *high = (uint32_t *) calloc(pmf_list->columns, sizeof(uint32_t));
+	uint32_t *low = (uint32_t *) calloc(pmf_list->columns, sizeof(uint32_t));
+	double *ratio = (double *) calloc(pmf_list->columns, sizeof(double));
 	double *entropies = (double *) _alloca(pmf_list->columns*sizeof(double));
 	double h_lo, h_hi;
 	uint32_t i, j;
 	struct pmf_list_t *uc_pmf_list = alloc_pmf_list(pmf_list->columns, pmf_list->alphabet);
 	struct pmf_t *pmf_temp;
 
+	*high_out = high;
+	*low_out = low;
+	*ratio_out = ratio;
+
 	// Column 0 pmf is the unconditional one, copy it to the unconditional pmf list
 	pmf_temp = get_cond_pmf(pmf_list, 0, 0);
-	combine_pmfs(pmf_temp, pmf_temp, 1.0, 0.0, &uc_pmf_list->pmfs[0]);
+	combine_pmfs(pmf_temp, pmf_temp, 1.0, 0.0, uc_pmf_list->pmfs[0]);
 
 	// Find unconditional pmfs for each column remaining
 	for (i = 1; i < pmf_list->columns; ++i) {
 		for (j = 0; j < pmf_list->alphabet->size; ++j) {
 			pmf_temp = get_cond_pmf(pmf_list, i, j);
-			combine_pmfs(&uc_pmf_list->pmfs[i], pmf_temp, 1.0, get_probability(&uc_pmf_list->pmfs[i-1], j), &uc_pmf_list->pmfs[i]);
+			combine_pmfs(uc_pmf_list->pmfs[i], pmf_temp, 1.0, get_probability(uc_pmf_list->pmfs[i-1], j), uc_pmf_list->pmfs[i]);
 		}
 	}
 
@@ -176,7 +182,7 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double *
 
 	// Rest of the columns are handled identically
 	for (i = 1; i < pmf_list->columns; ++i) {
-		pmf_temp = &uc_pmf_list->pmfs[i-1];
+		pmf_temp = uc_pmf_list->pmfs[i-1];
 		for (j = 0; j < pmf_list->alphabet->size; ++j) {
 			entropies[i] += get_probability(pmf_temp, j) * get_entropy(get_cond_pmf(pmf_list, i, j));
 		}
@@ -191,24 +197,24 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double *
 		switch(mode) {
 			case BIT_ALLOC_MODE_INT_STATES:
 				h_lo = pow(2, entropies[i]);
-				low[i] = floor(h_lo);
-				high[i] = ceil(h_lo);
-				h_lo = log2(low[i]);
-				h_hi = log2(high[i]);
+				low[i] = (uint32_t) h_lo;
+				high[i] = (uint32_t) ceil(h_lo);
+				h_lo = log2((double)low[i]);
+				h_hi = log2((double)high[i]);
 				ratio[i] = (entropies[i] - h_hi) / (h_lo - h_hi);
 				break;
 			case BIT_ALLOC_MODE_INT_POWER:
 				h_lo = floor(entropies[i]);
 				h_hi = ceil(entropies[i]);
-				low[i] = pow(2, h_lo);
-				high[i] = pow(2, h_hi);
+				low[i] = (uint32_t) pow(2, h_lo);
+				high[i] = (uint32_t) pow(2, h_hi);
 				ratio[i] = (entropies[i] - h_hi) / (h_lo - h_hi);
 				break;
 			case BIT_ALLOC_MODE_NO_MIX:
 			default:
 				ratio[i] = 1;
-				low[i] = floor(pow(2, entropies[i]));
-				high[i] = 0.0;
+				low[i] = (uint32_t) floor(pow(2, entropies[i]));
+				high[i] = 0;
 				break;
 		}
 	}
@@ -221,17 +227,18 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, double *
  * quantizers, as well as all of the PMFs and related stats
  * TODO: Add hi states to generation
  */
-struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode) {
+struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode) {
 	// Stuff for state allocation and mixing
-	double *hi_states, *lo_states, *state_ratio;
+	double *state_ratio;
+	uint32_t *hi_states, *lo_states;
 
 	// Miscellaneous variables
-	uint32_t column, i, j, k;
-	symbol_t x, q;
+	uint32_t column, i, j;
+	symbol_t q;
 	double weight, norm;
 
 	// Output list of conditional quantizers
-	struct cond_quantizer_list_t *q_list;
+	struct cond_quantizer_list_t *q_list = alloc_conditional_quantizer_list(info->columns);
 
 	// Constant alphabet of all possible input symbols
 	const struct alphabet_t *A = in_pmfs->alphabet;
@@ -248,27 +255,31 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 
 	// List of conditionally quantized PMFs after the next quantizer was applied
 	struct pmf_list_t *qpmf_list;
+	struct pmf_list_t *prev_qpmf_list;
 
 	// "Alphabet" of output quantizers for the previous column and PMF over that set
 	struct alphabet_t *q_alphabet;
 	struct pmf_t *q_pmf;
+	struct alphabet_t *next_q_alphabet;
+	struct pmf_t *next_q_pmf;
 
 	// Alphabet of all possible quantizer outputs from the previous column
 	struct alphabet_t *q_output_union;
+	struct alphabet_t *next_output_union;
 
 	// First we need to know what our training stats are and figure out how many states
 	// to put into each quantizer
 	calculate_statistics(info, in_pmfs);
-	find_bit_allocation(pmf_list, comp, &hi_states, &lo_states, &state_ratio, mode);
-
-	// For the first column, quantizer isn't conditional, so find it directly
-	q_temp = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo_states[0], NULL);
-	store_cond_quantizer(q_temp, q_list, 0, 0);
+	find_bit_allocation(in_pmfs, comp, &hi_states, &lo_states, &state_ratio, mode);
 
 	// Set up a quantizer alphabet for column zero. The cond quantizer list duplicates the
 	// alphabet internally so we don't need to worry about duplicating it
 	q_alphabet = alloc_alphabet(1);
 	cond_quantizer_init_column(q_list, 0, q_alphabet);
+	
+	// For the first column, quantizer isn't conditional, so find it directly
+	q_temp = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo_states[0], NULL);
+	store_cond_quantizer(q_temp, q_list, 0, 0);
 
 	// Initialize a 100% PMF for this quantizer alphabet
 	q_pmf = alloc_pmf(q_alphabet);
@@ -277,7 +288,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 
 	// Previous qpmf list needs to be initialized for a single quantizer's output
 	prev_qpmf_list = alloc_pmf_list(1, A);
-	apply_quantizer(q_temp, get_cond_pmf(in_pmfs, 0, 0), &prev_qpmf_list->pmfs[0]);
+	apply_quantizer(q_temp, get_cond_pmf(in_pmfs, 0, 0), prev_qpmf_list->pmfs[0]);
 
 	// Iterate over remaining columns and compute the quantizers and quantized PMFs
 	for (column = 1; column < info->columns; ++column) {
@@ -292,7 +303,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 			// and then add probability mass to that pmf
 			for (j = 0; j < A->size; ++j) {
 				q = q_temp->q[j];
-				pmf_temp = &cq_pmf_list[i]->pmfs[q];
+				pmf_temp = cq_pmf_list[i]->pmfs[q];
 				combine_pmfs(pmf_temp, get_cond_pmf(in_pmfs, column, j), 1.0, 1.0, pmf_temp);
 			}
 		}
@@ -321,8 +332,8 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 				q_temp = get_cond_quantizer(q_list, column-1, i);
 				if (alphabet_contains(q_temp->output_alphabet, q)) {
 					weight = get_probability(q_pmf, i);
-					pmf_temp = &xpmf_list->pmfs[j];
-					combine_pmfs(pmf_temp, &cq_pmf_list[i]->pmfs[q], 1.0, weight/norm, pmf_temp);
+					pmf_temp = xpmf_list->pmfs[j];
+					combine_pmfs(pmf_temp, cq_pmf_list[i]->pmfs[q], 1.0, weight/norm, pmf_temp);
 				}
 			}
 		}
@@ -338,11 +349,11 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 			q = q_output_union->symbols[j];
 
 			// Find and save quantizer
-			q_temp = generate_quantizer(&xpmf_list->pmfs[q], dist, lo_states[column], NULL);
+			q_temp = generate_quantizer(xpmf_list->pmfs[q], dist, lo_states[column], NULL);
 			store_cond_quantizer(q_temp, q_list, column, q);
 
 			// Find the PMF of the quantizer's output
-			apply_quantizer(q_temp, &xpmf_list->pmfs[q], &qpmf_list->pmfs[j]);
+			apply_quantizer(q_temp, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);
 		}
 
 		// Compute the next output alphabet union over all quantizers for this column
@@ -361,7 +372,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_info_t *info, st
 			for (i = 0; i < q_alphabet->size; ++i) {
 				// Total probability over PMF of each symbol conditioned on the quantizer that produced it
 				// Output symbol selects which quantizer is used from this column
-				next_q_pmf->pmf[j] += get_probability(q_pmf, i) * get_probability(&prev_qpmf_list->pmfs[i], q);
+				next_q_pmf->pmf[j] += get_probability(q_pmf, i) * get_probability(prev_qpmf_list->pmfs[i], q);
 			}
 		}
 

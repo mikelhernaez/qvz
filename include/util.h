@@ -4,7 +4,14 @@
  * Utility functions to help do stuff
  */
 
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <math.h>
+#include <stdlib.h>
 #include <float.h>
+#include <malloc.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #ifdef LINUX
 	#include <time.h>
@@ -48,6 +55,12 @@ int cb_log2(int x);
 // C99 restrict quantifier on linux and windows
 #ifndef LINUX
 	#define restrict __restrict
+#endif
+
+// Macros for windows-versions of things on linux
+#ifdef LINUX
+	#define _stat stat
+	#define _alloca alloca
 #endif
 
 #endif
