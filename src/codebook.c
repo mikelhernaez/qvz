@@ -230,7 +230,6 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t
  */
 struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode) {
 	// Stuff for state allocation and mixing
-	double *state_ratio;
 	uint32_t *hi_states, *lo_states;
 
 	// Miscellaneous variables
@@ -271,7 +270,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// First we need to know what our training stats are and figure out how many states
 	// to put into each quantizer
 	calculate_statistics(info, in_pmfs);
-	find_bit_allocation(in_pmfs, comp, &hi_states, &lo_states, &state_ratio, mode);
+	find_bit_allocation(in_pmfs, comp, &hi_states, &lo_states, &q_list->ratio, mode);
 
 	// Set up a quantizer alphabet for column zero. The cond quantizer list duplicates the
 	// alphabet internally so we don't need to worry about duplicating it
@@ -320,7 +319,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			// First, find the normalizing constant by adding probabilities where this symbol
 			// is produced
 			for (i = 0; i < q_alphabet->size; ++i) {
-				q_temp = get_cond_quantizer(q_list, column-1, i);
+				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
 				if (alphabet_contains(q_temp->output_alphabet, q)) {
 					norm += get_probability(q_pmf, i);
 				}
@@ -330,7 +329,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			// of each quantizer and normalized by the total probability of all quantizers producing
 			// a given symbol
 			for (i = 0; i < q_alphabet->size; ++i) {
-				q_temp = get_cond_quantizer(q_list, column-1, i);
+				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
 				if (alphabet_contains(q_temp->output_alphabet, q)) {
 					weight = get_probability(q_pmf, i);
 					pmf_temp = xpmf_list->pmfs[j];
@@ -406,6 +405,76 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 
 // Legacy stuff for the current version; this should be updated as things are implemented
 // using the new C-based calculations
+
+/**
+ * Writes a codebook to a file in the same format that we read it below, from the quantizer list
+ */
+void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers) {
+	FILE *fp;
+	uint32_t i, j, k, z;
+	uint32_t size;
+	uint32_t columns = quantizers->columns;
+	struct quantizer_t *q_temp;
+	char *eol = "\n";
+	char *linebuf = (char *) _alloca(sizeof(char)*columns);
+	char *empty = (char *) _alloca(sizeof(char)*columns);
+
+	fp = fopen(filename, "wt");
+	if (!fp) {
+		perror("Unable to open codebook file");
+		exit(1);
+	}
+
+	// ASCII spaces are used to denote "unused" stuff
+	memset(empty, 32, sizeof(char)*columns);
+
+	// First two lines are not used (number of states per column) but need to have the same length
+	// as the number of columns
+	fwrite(empty, sizeof(char), columns, fp);
+	fwrite(eol, sizeof(char), 1, fp);
+	fwrite(empty, sizeof(char), columns, fp);
+	fwrite(eol, sizeof(char), 1, fp);
+
+	// Next line is the ratio between states
+	for (i = 0; i < columns; ++i) {
+		linebuf[i] = ((uint8_t)quantizers->ratio*100) + 33;
+	}
+	fwrite(linebuf, sizeof(char), columns, fp);
+	fwrite(eol, sizeof(char), 1, fp);
+	
+	// Now, as we only have low states we will write each quantizer twice to match the format
+
+	// Column 0 is handled specially
+	q_temp = get_cond_quantizer_indexed(quantizers, 0, 0);
+	size = q_temp->alphabet->size;
+	for (i = 0; i < size; ++i) {
+		linebuf[i] = q_temp->q[i] + 33;
+	}
+	fwrite(linebuf, sizeof(char), size, fp);
+	fwrite(eol, sizeof(char), 1, fp);
+	fwrite(linebuf, sizeof(char), size, fp);
+	fwrite(eol, sizeof(char), 1, fp);
+
+	for (i = 1; i < columns; ++i) {
+		for (z = 0; z < 2; ++z) {
+			for (j = 0; j < size; ++j) {
+				q_temp = get_cond_quantizer(quantizers, i, j);
+				if (q_temp) {
+					for (k = 0; k < columns; ++k) {
+						linebuf[k] = q_temp->q[k] + 33;
+					}
+					fwrite(linebuf, sizeof(char), size, fp);
+				}
+				else {
+					fwrite(empty, sizeof(char), size, fp);
+				}
+			}
+			fwrite(eol, sizeof(char), 1, fp);
+		}
+	}
+
+	fclose(fp);
+}
 
 /**
  * Reads in the codebook in the specified filename, calculates how many columns it is configured

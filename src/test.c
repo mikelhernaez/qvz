@@ -18,8 +18,7 @@ int main(int argc, char **argv) {
 	struct hrtimer_t timer;
 	struct cond_pmf_list_t *training_stats;
 	uint32_t i, j, k;
-	uint32_t *hi, *lo;
-	double *ratio;
+	struct cond_quantizer_list_t *quantizers;
 
 	if (argc != 3) {
 		printf("Usage: %s [input file] [output file]\n", argv[0]);
@@ -38,13 +37,11 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	calculate_statistics(&training_file, training_stats);
-	find_bit_allocation(training_stats, 0.5, &hi, &lo, &ratio, BIT_ALLOC_MODE_INT_STATES);
+	quantizers = generate_codebooks(&training_file, training_stats, dist, 0.5, BIT_ALLOC_MODE_NO_MIX);
+	write_codebook(output_path, quantizers);
 
-	// Debug: verify the PMFs that were calculated
-	for (i = 0; i < training_file.columns; ++i) {
-		printf("Column %d: %d / %d (%f)\n", i, hi[i], lo[i], ratio[i]);
-	}
+	// Debug: verify the output quantizers
+	print_quantizer(get_cond_quantizer_indexed(quantizers, 0, 0));
 
 	stop_timer(&timer);
 	printf("Elapsed: %f seconds", get_timer_interval(&timer));

@@ -41,6 +41,7 @@ struct cond_quantizer_list_t {
 	uint32_t columns;
 	struct alphabet_t **input_alphabets;
 	struct quantizer_t ***q;
+	double *ratio;
 };
 
 // Memory management
@@ -87,6 +88,7 @@ struct codebook_list_t {
 };
 
 // Master function to read a codebook from a file
+void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers);
 uint32_t read_codebook(const char *filename, struct codebook_list_t *list, uint8_t symbols);
 
 // Initialization and parsing
