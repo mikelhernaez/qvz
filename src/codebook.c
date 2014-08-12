@@ -373,6 +373,8 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 		for (j = 1; j < q_output_union->size; ++j) {
 			alphabet_union(next_output_union, get_cond_quantizer_indexed(q_list, column, j)->output_alphabet, next_output_union);
 		}
+//		printf("Output alphabet union:\n");
+//		print_alphabet(next_output_union);
 
 		// Find the pmf of choice of quantizer for this column
 		next_q_alphabet = alloc_alphabet(q_output_union->size);

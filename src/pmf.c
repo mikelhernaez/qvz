@@ -335,6 +335,18 @@ void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t
 		k += 1;
 	}
 
+	while (i < a->size) {
+		sym[k] = a->symbols[i];
+		k += 1;
+		i += 1;
+	}
+
+	while (j < b->size) {
+		sym[k] = b->symbols[j];
+		k += 1;
+		j += 1;
+	}
+
 	// If we already have an output array, replace it with a new one
 	if (result->symbols)
 		free(result->symbols);
