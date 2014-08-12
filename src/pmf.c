@@ -222,6 +222,30 @@ void recalculate_pmf(struct pmf_t *pmf) {
 }
 
 /**
+ * Renormalizes a PMF if it is nonzero
+ */
+void renormalize_pmf(struct pmf_t *pmf) {
+	double total = 0;
+	uint32_t i;
+
+	// PMFs still in counts form never need renormalization
+	if (!pmf->pmf_ready)
+		return;
+
+	// Find total
+	for (i = 0; i < pmf->alphabet->size; ++i) {
+		total += pmf->pmf[i];
+	}
+
+	// If nonzero, scale every entry to ensure we sum to 1
+	if (total > 0) {
+		for (i = 0; i < pmf->alphabet->size; ++i) {
+			pmf->pmf[i] = pmf->pmf[i] / total;
+		}
+	}
+}
+
+/**
  * Converts a PMF that is stored as a series of doubles back to the counts representation,
  * or alternatively this can be viewed as quantizing it into a fixed point representation in
  * 0.m format

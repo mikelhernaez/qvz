@@ -304,7 +304,15 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			for (j = 0; j < A->size; ++j) {
 				q = q_temp->q[j];
 				pmf_temp = cq_pmf_list[i]->pmfs[q];
+				// Even better would be to weight by the probability of j / sum(all k that map to the same q as j)
+				// With the renormalization step separate we can just multiply by probability of j given this quantizer was chosen
+				// For now, assume uniform prior (suboptimal)
 				combine_pmfs(pmf_temp, get_cond_pmf(in_pmfs, column, j), 1.0, 1.0, pmf_temp);
+			}
+
+			// Renormalize the PMFs that have been combined
+			for (j = 0; j < A->size; ++j) {
+				renormalize_pmf(cq_pmf_list[i]->pmfs[j]);
 			}
 		}
 
@@ -318,12 +326,16 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 
 			// First, find the normalizing constant by adding probabilities where this symbol
 			// is produced
+//			printf("Element %d of q_output_union.\n", j);
 			for (i = 0; i < q_alphabet->size; ++i) {
+//				printf("\tElement %d of q_alphabet.\n", i);
 				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
 				if (alphabet_contains(q_temp->output_alphabet, q)) {
 					norm += get_probability(q_pmf, i);
+//					printf("\t\tNorm increased by %f.\n", get_probability(q_pmf, i));
 				}
 			}
+//			printf("Final norm: %f\n", norm);
 
 			// Then, go over the quantizer alphabet again and merge PMFs weighted by the probability
 			// of each quantizer and normalized by the total probability of all quantizers producing
@@ -332,7 +344,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
 				if (alphabet_contains(q_temp->output_alphabet, q)) {
 					weight = get_probability(q_pmf, i);
-					pmf_temp = xpmf_list->pmfs[j];
+					pmf_temp = xpmf_list->pmfs[q];
 					combine_pmfs(pmf_temp, cq_pmf_list[i]->pmfs[q], 1.0, weight/norm, pmf_temp);
 				}
 			}
@@ -365,16 +377,23 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 		// Find the pmf of choice of quantizer for this column
 		next_q_alphabet = alloc_alphabet(q_output_union->size);
 		next_q_pmf = alloc_pmf(next_q_alphabet);
+//		printf("Alphabet: ");
+//		print_alphabet(next_q_alphabet);
 		for (j = 0; j < next_q_alphabet->size; ++j) {
 			// next_q_alphabet is the same size as q_output_union, but the first indexes quantizers
 			// and the second is the unique set of quantizer outputs
 			q = q_output_union->symbols[j];
+//			printf("q: %d\n", q);
 			for (i = 0; i < q_alphabet->size; ++i) {
 				// Total probability over PMF of each symbol conditioned on the quantizer that produced it
 				// Output symbol selects which quantizer is used from this column
+//				printf("pmf[%d] = %f + (%f * %f)\n", j, next_q_pmf->pmf[j], get_probability(q_pmf, i), get_probability(prev_qpmf_list->pmfs[i], q));
+//				print_pmf(prev_qpmf_list->pmfs[i]);
 				next_q_pmf->pmf[j] += get_probability(q_pmf, i) * get_probability(prev_qpmf_list->pmfs[i], q);
 			}
 		}
+		next_q_pmf->pmf_ready = 1;
+//		print_pmf(next_q_pmf);
 
 		// Finally, deallocate memory that was used on this iteration
 		free(q_output_union);

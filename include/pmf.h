@@ -62,6 +62,7 @@ double get_kl_divergence(struct pmf_t *p, struct pmf_t *q);
 struct pmf_t *combine_pmfs(struct pmf_t *a, struct pmf_t *b, double weight_a, double weight_b, struct pmf_t *result);
 void pmf_increment(struct pmf_t *pmf, uint32_t index);
 void recalculate_pmf(struct pmf_t *);
+void renormalize_pmf(struct pmf_t *);
 void pmf_to_counts(struct pmf_t *pmf, uint32_t m);
 void clear_pmf(struct pmf_t *);
 void clear_pmf_list(struct pmf_list_t *);
