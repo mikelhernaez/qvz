@@ -178,7 +178,7 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t
 	memset(entropies, 0, pmf_list->columns*sizeof(double));
 
 	// Column 0 is handled specially because it only has one left context
-	entropies[0] = get_entropy(get_cond_pmf(pmf_list, 0, 0));
+	entropies[0] = get_entropy(get_cond_pmf(pmf_list, 0, 0)) * comp;
 
 	// Rest of the columns are handled identically
 	for (i = 1; i < pmf_list->columns; ++i) {
@@ -186,6 +186,7 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t
 		for (j = 0; j < pmf_list->alphabet->size; ++j) {
 			entropies[i] += get_probability(pmf_temp, j) * get_entropy(get_cond_pmf(pmf_list, i, j));
 		}
+		entropies[i] = entropies[i] * comp;
 	}
 
 	// Compute number of states used based on mode parameter

@@ -41,11 +41,9 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 	}
 
 	// Figure out how many lines we'll need depending on whether we were limited or not
-	if (max_lines == 0) {
-		_stat(path, &finfo);
-		info->lines = finfo.st_size / ((uint64_t) (info->columns+1));
-	}
-	else {
+	_stat(path, &finfo);
+	info->lines = finfo.st_size / ((uint64_t) (info->columns+1));
+	if (max_lines > 0 && info->lines > max_lines) {
 		info->lines = max_lines;
 	}
 	
@@ -57,7 +55,7 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 	block_idx = 0;
 	line_idx = 0;
 	fseek(fp, 0, SEEK_SET);
-	while (!feof(fp)) {
+	while (!feof(fp) && (block_idx * MAX_LINES_PER_BLOCK + line_idx) < info->lines) {
 		// Read line and store in our array with data conversion, also stripping newlines
 		fgets(line, 1024, fp);
 		for (j = 0; j < info->columns; ++j) {

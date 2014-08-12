@@ -1,7 +1,7 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 /**
- * Utility functions to help do stuff
+ * Utility functions to help do stuff and manage cross-platform issues
  */
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -15,8 +15,11 @@
 
 #ifdef LINUX
 	#include <time.h>
+	#define _stat stat
+	#define _alloca alloca
 #else
 	#include <windows.h>
+	#define restrict __restrict
 #endif
 
 struct hrtimer_t {
@@ -50,17 +53,6 @@ int cb_log2(int x);
 #endif
 #ifndef NAN
 	#define NAN (INFINITY - INFINITY)
-#endif
-
-// C99 restrict quantifier on linux and windows
-#ifndef LINUX
-	#define restrict __restrict
-#endif
-
-// Macros for windows-versions of things on linux
-#ifdef LINUX
-	#define _stat stat
-	#define _alloca alloca
 #endif
 
 #endif
