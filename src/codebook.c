@@ -376,6 +376,13 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			// Find the PMF of the quantizer's output
 			apply_quantizer(q_temp, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);
 		}
+		
+		// MIKEL: In order to compute the probabilities of the quantized versions you are quantizing the output, right?
+		// MIKEL: I think this might be improved by directly computing P(X|Q=q) [the pmf needed to compute the quantizer],
+		// MIKEL: without quantizing the output.
+		// MIKEL: Anyways, I think I need to go through this code with you :)
+		
+		
 
 		// Compute the next output alphabet union over all quantizers for this column
 		next_output_union = duplicate_alphabet(get_cond_quantizer_indexed(q_list, column, 0)->output_alphabet);
