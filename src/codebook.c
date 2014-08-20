@@ -188,7 +188,12 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t
 		}
 		entropies[i] = entropies[i] * comp;
 	}
-
+	
+	// MIKEL: The conditional entropies are computed.
+	// MIKEL: Instead of using the average entropy (entropy[i]), we need to use the individual conditional entropies.
+	// MIKEL: If I'm not mistaken, "get_entropy(get_cond_pmf(pmf_list, i, j))" is exactly what we need. 
+	// MIKEL: So we need to change from entropies[i] to entropies[i][j].
+	
 	// Compute number of states used based on mode parameter
 	// r = ratio:
 	// H = rH_lo + (1-r)H_hi
@@ -219,6 +224,10 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t
 				break;
 		}
 	}
+	
+	//MIKEL: I think I asked before, why using H to compute lo and hi and r instead using 2^H?
+	//MIKEL: i.e., why not doing n the first and second case r = (2^H - high) / (low - high) ?
+	//MIKEL: Finally, as with the entropies, we should compute high[i][j], low[i][j], and ratio[i][j].
 
 	free_pmf_list(uc_pmf_list);
 }
