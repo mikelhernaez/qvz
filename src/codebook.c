@@ -456,12 +456,13 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers) {
 	FILE *fp;
 	uint32_t i, j, k, z;
-	uint32_t size;
 	uint32_t columns = quantizers->columns;
-	struct quantizer_t *q_temp;
+	struct quantizer_t *q_temp = get_cond_quantizer_indexed(quantizers, 0, 0);
+	uint32_t size = q_temp->alphabet->size;
+	uint32_t buflen = columns > size ? columns : size;
 	char *eol = "\n";
-	char *linebuf = (char *) _alloca(sizeof(char)*columns);
-	char *empty = (char *) _alloca(sizeof(char)*columns);
+	char *linebuf = (char *) _alloca(sizeof(char)*buflen);
+	char *empty = (char *) _alloca(sizeof(char)*buflen);
 
 	fp = fopen(filename, "wt");
 	if (!fp) {
@@ -470,7 +471,7 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 	}
 
 	// ASCII spaces are used to denote "unused" stuff
-	memset(empty, 32, sizeof(char)*columns);
+	memset(empty, 32, sizeof(char)*buflen);
 
 	// First two lines are not used (number of states per column) but need to have the same length
 	// as the number of columns
@@ -489,8 +490,6 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 	// Now, as we only have low states we will write each quantizer twice to match the format
 
 	// Column 0 is handled specially
-	q_temp = get_cond_quantizer_indexed(quantizers, 0, 0);
-	size = q_temp->alphabet->size;
 	for (i = 0; i < size; ++i) {
 		linebuf[i] = q_temp->q[i] + 33;
 	}
