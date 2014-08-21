@@ -242,7 +242,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	uint32_t *hi_states, *lo_states;
 
 	// Miscellaneous variables
-	uint32_t column, i, j;
+	uint32_t column, i, j, k;
 	symbol_t q;
 	double weight, norm;
 
@@ -313,10 +313,17 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			for (j = 0; j < A->size; ++j) {
 				q = q_temp->q[j];
 				pmf_temp = cq_pmf_list[i]->pmfs[q];
+
+				// Find probability of this symbol occuring in the previous column based on original conditional PMFs
+				// This could be improved (i think) by considering the quantizers more but the specifics aren't clear to me at the moment
+				norm = 0.0;
+				for (k = 0; k < A->size; ++k) {
+					norm += get_probability(get_cond_pmf(in_pmfs, column-1, k), j);
+				}
+
 				// Even better would be to weight by the probability of j / sum(all k that map to the same q as j)
 				// With the renormalization step separate we can just multiply by probability of j given this quantizer was chosen
-				// For now, assume uniform prior (suboptimal)
-				combine_pmfs(pmf_temp, get_cond_pmf(in_pmfs, column, j), 1.0, 1.0, pmf_temp);
+				combine_pmfs(pmf_temp, get_cond_pmf(in_pmfs, column, j), 1.0, norm, pmf_temp);
 			}
 
 			// Renormalize the PMFs that have been combined
