@@ -34,4 +34,4 @@ decoder : $(DEC_OBJ)
 	$(CC) $(LDFLAGS) $(DEC_OBJ) -o decoder
 
 clean :
-	$(RM) *.o encoder decoder cluster
+	$(RM) *.o encoder decoder cluster test
