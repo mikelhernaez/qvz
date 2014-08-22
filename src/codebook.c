@@ -2,6 +2,7 @@
 #include "lines.h"
 
 #include <stdio.h>
+#include <assert.h>
 
 /**
  * To compute stats for the training data, we will need a set of conditional PMFs, one
@@ -39,6 +40,8 @@ void free_conditional_pmf_list(struct cond_pmf_list_t *list) {
 		free_pmf(list->pmfs[0]);
 	}
 	free(list);
+
+	free_pmf_list(list->marginal_pmfs);
 }
 
 /**
@@ -131,8 +134,10 @@ void store_cond_quantizer(struct quantizer_t *q, struct cond_quantizer_list_t *l
  */
 void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *pmf_list) {
 	uint32_t block_idx, line_idx, column;
+	uint32_t j;
 	struct line_t *line;
 
+	// Calculate all conditional PMFs
 	for (block_idx = 0; block_idx < info->block_count; ++block_idx) {
 		for (line_idx = 0; line_idx < info->blocks[block_idx].count; ++line_idx) {
 			line = &info->blocks[block_idx].lines[line_idx];
@@ -140,6 +145,15 @@ void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *p
 			for (column = 1; column < info->columns; ++column) {
 				pmf_increment(get_cond_pmf(pmf_list, column, line->data[column-1]), line->data[column]);
 			}
+		}
+	}
+
+	// Calculate unconditional PMFs afterwards
+	pmf_list->marginal_pmfs = alloc_pmf_list(info->columns, pmf_list->alphabet);
+	combine_pmfs(get_cond_pmf(pmf_list, 0, 0), pmf_list->marginal_pmfs->pmfs[0], 1.0, 0.0, pmf_list->marginal_pmfs->pmfs[0]);
+	for (column = 1; column < info->columns; ++column) {
+		for (j = 0; j < pmf_list->alphabet->size; ++j) {
+			combine_pmfs(pmf_list->marginal_pmfs->pmfs[column], get_cond_pmf(pmf_list, column, j), 1.0, get_probability(pmf_list->marginal_pmfs->pmfs[column-1], j), pmf_list->marginal_pmfs->pmfs[column]);
 		}
 	}
 }
@@ -237,14 +251,14 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t
  * quantizers, as well as all of the PMFs and related stats
  * TODO: Add hi states to generation
  */
-struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode) {
+struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
 	// Stuff for state allocation and mixing
 	uint32_t *hi_states, *lo_states;
 
 	// Miscellaneous variables
-	uint32_t column, i, j, k;
+	uint32_t column, i, j, k, x;
 	symbol_t q;
-	double weight, norm;
+	double weight, norm, mse, column_mse, total_mse;
 
 	// Output list of conditional quantizers
 	struct cond_quantizer_list_t *q_list = alloc_conditional_quantizer_list(info->columns);
@@ -287,8 +301,11 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	cond_quantizer_init_column(q_list, 0, q_alphabet);
 	
 	// For the first column, quantizer isn't conditional, so find it directly
-	q_temp = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo_states[0], NULL);
+	q_temp = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo_states[0], &mse);
 	store_cond_quantizer(q_temp, q_list, 0, 0);
+	total_mse = mse;
+
+	printf("MSE for column 0: %f\n", mse);
 
 	// Initialize a 100% PMF for this quantizer alphabet
 	q_pmf = alloc_pmf(q_alphabet);
@@ -318,7 +335,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 				// This could be improved (i think) by considering the quantizers more but the specifics aren't clear to me at the moment
 				norm = 0.0;
 				for (k = 0; k < A->size; ++k) {
-					norm += get_probability(get_cond_pmf(in_pmfs, column-1, k), j);
+					norm += get_probability(get_cond_pmf(in_pmfs, column-1, k), j) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], j);
 				}
 
 				// Even better would be to weight by the probability of j / sum(all k that map to the same q as j)
@@ -369,20 +386,68 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 		// So, xpmf_list is now the set of all PMFs for this column conditioned on the previous
 		// column's quantized value, with history, choice of quantizer, etc. all added out.
 		// Now we need to compute the stats that we need for the next iteration
-
+		
+		/**
+		// Different approach to calculating xpmf, we should be able to find P(X_c = x | Q_c-1=q) for each
+		// q in the possible list of quantizer outputs for the previous column
+		// This should NOT require renormalization; I should be able to compute the correct PMF directly,
+		// but I am having trouble expanding the expression for some reason
+		xpmf_list = alloc_pmf_list(A->size, A);
+		pmf_temp = alloc_pmf(A);
+		for (j = 0; j < q_output_union->size; ++j) {
+			q = q_output_union->symbols[j];
+			for (i = 0; i < q_alphabet->size; ++i) {
+				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
+				for (x = 0; x < A->size; ++x) {
+					norm = 0;
+					for (k = 0; k < A->size; ++k) {
+						if (q_temp->q[k] == q) {
+							norm += get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], k);
+						}
+					}
+					pmf_temp->pmf[x] = norm;
+					for (k = 0; k < A->size; ++k) {
+						if (q_temp->q[k] == q && norm > 0) {
+							xpmf_list->pmfs[q]->pmf[x] += get_probability(get_cond_pmf(in_pmfs, column, k), x) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], k) * get_probability(q_pmf, i) / norm;
+						}
+					}
+				}
+			}
+			xpmf_list->pmfs[q]->pmf_ready = 1;
+			renormalize_pmf(xpmf_list->pmfs[q]);
+		}
+		*/
+			
 		// So, first, compute the next set of quantizers and associated output PMFs
 		cond_quantizer_init_column(q_list, column, q_output_union);
 		qpmf_list = alloc_pmf_list(q_output_union->size, A);
+		printf("MSE for column %d\n", column);
+		column_mse = 0;
 		for (j = 0; j < q_output_union->size; ++j) {
 			q = q_output_union->symbols[j];
 
 			// Find and save quantizer
-			q_temp = generate_quantizer(xpmf_list->pmfs[q], dist, lo_states[column], NULL);
+			q_temp = generate_quantizer(xpmf_list->pmfs[q], dist, lo_states[column], &mse);
 			store_cond_quantizer(q_temp, q_list, column, q);
 
 			// Find the PMF of the quantizer's output
 			apply_quantizer(q_temp, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);
+
+			// Calculate MSE contribution from this quantizer
+			norm = 0.0;
+			for (i = 0; i < q_alphabet->size; ++i) {
+				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
+				if (alphabet_contains(q_temp->output_alphabet, q)) {
+					norm += get_probability(q_pmf, i) * get_probability(prev_qpmf_list->pmfs[i], q);
+				}
+			}
+			printf("MSE: %f, Pr: %f\t", mse, norm);
+			total_mse += mse * norm;
+			column_mse += mse * norm;
 		}
+		printf("Column MSE: %f.\n", column_mse);
+//		if (column == 4)
+//			printf("3");
 		
 		// MIKEL: In order to compute the probabilities of the quantized versions you are quantizing the output, right?
 		// MIKEL: I think this might be improved by directly computing P(X|Q=q) [the pmf needed to compute the quantizer],
@@ -396,29 +461,28 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 		for (j = 1; j < q_output_union->size; ++j) {
 			alphabet_union(next_output_union, get_cond_quantizer_indexed(q_list, column, j)->output_alphabet, next_output_union);
 		}
-//		printf("Output alphabet union:\n");
-//		print_alphabet(next_output_union);
+		printf("Output alphabet union:\n");
+		print_alphabet(next_output_union);
 
 		// Find the pmf of choice of quantizer for this column
 		next_q_alphabet = alloc_alphabet(q_output_union->size);
 		next_q_pmf = alloc_pmf(next_q_alphabet);
-//		printf("Alphabet: ");
-//		print_alphabet(next_q_alphabet);
+		printf("Number of quantizers: %d\n", next_q_alphabet->size);
 		for (j = 0; j < next_q_alphabet->size; ++j) {
 			// next_q_alphabet is the same size as q_output_union, but the first indexes quantizers
 			// and the second is the unique set of quantizer outputs
 			q = q_output_union->symbols[j];
-//			printf("q: %d\n", q);
+			printf("q: %d\n", q);
 			for (i = 0; i < q_alphabet->size; ++i) {
 				// Total probability over PMF of each symbol conditioned on the quantizer that produced it
 				// Output symbol selects which quantizer is used from this column
-//				printf("pmf[%d] = %f + (%f * %f)\n", j, next_q_pmf->pmf[j], get_probability(q_pmf, i), get_probability(prev_qpmf_list->pmfs[i], q));
+				printf("pmf[%d] = %f + (%f * %f)\n", j, next_q_pmf->pmf[j], get_probability(q_pmf, i), get_probability(prev_qpmf_list->pmfs[i], q));
 //				print_pmf(prev_qpmf_list->pmfs[i]);
 				next_q_pmf->pmf[j] += get_probability(q_pmf, i) * get_probability(prev_qpmf_list->pmfs[i], q);
 			}
 		}
 		next_q_pmf->pmf_ready = 1;
-//		print_pmf(next_q_pmf);
+		print_pmf(next_q_pmf);
 
 		// Finally, deallocate memory that was used on this iteration
 		free(q_output_union);
@@ -442,6 +506,9 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	free(q_pmf);
 	free_pmf_list(qpmf_list);
 	free(q_alphabet);
+
+	if (expected_distortion != NULL)
+		*expected_distortion = total_mse / info->columns;
 
 	// TODO: Generate a codebook-format organization of the quantizers for quick lookup during encoding
 	return q_list;
@@ -482,7 +549,7 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 
 	// Next line is the ratio between states
 	for (i = 0; i < columns; ++i) {
-		linebuf[i] = ((uint8_t)quantizers->ratio*100) + 33;
+		linebuf[i] = ((uint8_t)(quantizers->ratio[i]*100)) + 33;
 	}
 	fwrite(linebuf, sizeof(char), columns, fp);
 	fwrite(eol, sizeof(char), 1, fp);
@@ -503,7 +570,7 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 			for (j = 0; j < size; ++j) {
 				q_temp = get_cond_quantizer(quantizers, i, j);
 				if (q_temp) {
-					for (k = 0; k < columns; ++k) {
+					for (k = 0; k < size; ++k) {
 						linebuf[k] = q_temp->q[k] + 33;
 					}
 					fwrite(linebuf, sizeof(char), size, fp);

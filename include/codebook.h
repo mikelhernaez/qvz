@@ -28,6 +28,7 @@ struct cond_pmf_list_t {
 	uint32_t columns;
 	const struct alphabet_t *alphabet;
 	struct pmf_t **pmfs;
+	struct pmf_list_t *marginal_pmfs;
 };
 
 /**
@@ -62,7 +63,7 @@ void store_cond_quantizer(struct quantizer_t *q, struct cond_quantizer_list_t *l
 // Meat of the implementation
 void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
 void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t **high, uint32_t **low, double **ratio, uint32_t mode);
-struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode);
+struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion);
 
 // Legacy stuff to be converted still
 

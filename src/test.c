@@ -18,6 +18,7 @@ int main(int argc, char **argv) {
 	struct hrtimer_t timer;
 	struct cond_pmf_list_t *training_stats;
 	uint32_t i, j, k;
+	double mse;
 	struct cond_quantizer_list_t *quantizers;
 
 	if (argc != 3) {
@@ -37,13 +38,11 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	quantizers = generate_codebooks(&training_file, training_stats, dist, 0.5, BIT_ALLOC_MODE_NO_MIX);
+	quantizers = generate_codebooks(&training_file, training_stats, dist, 0.5, BIT_ALLOC_MODE_NO_MIX, &mse);
 	write_codebook(output_path, quantizers);
 
-	// Debug: verify the output quantizers
-	print_quantizer(get_cond_quantizer_indexed(quantizers, 0, 0));
-
 	stop_timer(&timer);
+	printf("Expected MSE: %f\n", mse); 
 	printf("Elapsed: %f seconds", get_timer_interval(&timer));
 
 #ifndef LINUX
