@@ -239,10 +239,6 @@ void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t
 		}
 	}
 	
-	//MIKEL: I think I asked before, why using H to compute lo and hi and r instead using 2^H?
-	//MIKEL: i.e., why not doing n the first and second case r = (2^H - high) / (low - high) ?
-	//MIKEL: Finally, as with the entropies, we should compute high[i][j], low[i][j], and ratio[i][j].
-
 	free_pmf_list(uc_pmf_list);
 }
 
