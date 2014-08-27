@@ -16,6 +16,10 @@
 	#include <time.h>
 	#define _stat stat
 	#define _alloca alloca
+#elif __APPLE__
+    #include <time.h>
+    #define _stat stat
+    #define _alloca alloca
 #else
   #include <malloc.h>
 	#include <windows.h>
@@ -24,6 +28,10 @@
 
 struct hrtimer_t {
 #ifdef LINUX
+	struct timespec start;
+	struct timespec stop;
+	struct timespec res;
+#elif __APPLE__
 	struct timespec start;
 	struct timespec stop;
 	struct timespec res;
