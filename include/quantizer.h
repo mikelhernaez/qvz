@@ -29,6 +29,9 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 // Calculate the output pmf when the quantizer is applied to the input pmf
 struct pmf_t *apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_t *restrict output);
 
+// Calculate P(Q_0|X_0) once the quantizer associated to X_col is 
+struct pmf_list_t *initialize_P_Qi_Xi(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_list_t *restrict output);
+
 // Display/debugging
 void print_quantizer(struct quantizer_t *);
 

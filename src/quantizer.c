@@ -165,6 +165,38 @@ struct pmf_t *apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *rest
 }
 
 /**
+* MIKEL
+ */
+struct pmf_list_t *initialize_P_Qi_Xi(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_list_t *restrict output) {
+	uint32_t i, j;
+    
+    if (!pmf->pmf_ready)
+        recalculate_pmf(pmf);
+    
+    for (j = 0; pmf->alphabet->size; j++) {
+    
+        
+	
+        if (output->pmfs[j]) {
+            // Clear existing pmf from output
+            memset(output->pmfs[j]->pmf, 0, output->pmfs[j]->alphabet->size * sizeof(double));
+        }
+        else {
+            // Allocate a new PMF for output
+            output->pmfs[j] = alloc_pmf(pmf->alphabet);
+        }
+    
+        // Sum together input probabilities that map to the same output
+        for (i = 0; i < pmf->alphabet->size; ++i) {
+            output->pmfs[j]->pmf[q->q[i]] = get_probability(pmf, i);
+        }
+        output->pmfs[j]->pmf_ready = 1;
+    }
+    
+        return output;
+}
+
+/**
  * Print a quantizer to stdout
  */
 void print_quantizer(struct quantizer_t *q) {

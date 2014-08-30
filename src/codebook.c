@@ -285,6 +285,9 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// Alphabet of all possible quantizer outputs from the previous column
 	struct alphabet_t *q_output_union;
 	struct alphabet_t *next_output_union;
+    
+    // MIKEL:
+    struct pmf_list_t *P_Qi_Xi;
 
 	// First we need to know what our training stats are and figure out how many states
 	// to put into each quantizer
@@ -311,9 +314,27 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// Previous qpmf list needs to be initialized for a single quantizer's output
 	prev_qpmf_list = alloc_pmf_list(1, A);
 	apply_quantizer(q_temp, get_cond_pmf(in_pmfs, 0, 0), prev_qpmf_list->pmfs[0]);
-
+    
+    
+    
+    // MIKEL: Compute P(Q_0|X_0) using the quantizer of the first column
+    P_Qi_Xi = alloc_pmf_list(1, A);
+    initialize_P_Qi_Xi(q_temp, get_cond_pmf(in_pmfs, 0, 0), P_Qi_Xi);
+    
+    // MIKEL: We can Compute P(X_1|Q_0) from the previous expression
+    for (x = 0; x < A->size; x++) {
+        norm += get_probability(P_Qi_Xi->pmfs[x], q) * get_probability(get_cond_pmf(in_pmfs, column, k), x) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], k);
+    }
+    
+    // MIKEL: Compute the quantizer associated to P(X_1|Q_0)
+    
+    
+    // MIKEL: Once the quantizer is computed start the loop for the rest of the columns
+    // MIKEL: First compute P(Q_i|X_i) and then P(X_{i+1}|Q_i)
+    
 	// Iterate over remaining columns and compute the quantizers and quantized PMFs
 	for (column = 1; column < info->columns; ++column) {
+        
 
 		/*
 		// Per quantizer from previous column, we'll have a list of conditional quantized PMFs
@@ -399,6 +420,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
 				for (x = 0; x < A->size; ++x) {
 					norm = 0;
+                    // MIKEL: norm = P(Q_{column-1}=q|Q_{column-2}=i)
 					for (k = 0; k < A->size; ++k) {
 						if (q_temp->q[k] == q) {
 							norm += get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], k);
