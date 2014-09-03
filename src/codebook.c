@@ -252,7 +252,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	uint32_t *hi_states, *lo_states;
 
 	// Miscellaneous variables
-	uint32_t column, i, j, k, x;
+	uint32_t column, i, j, k, x, q1;
 	symbol_t q;
 	double weight, norm, mse, column_mse, total_mse;
 
@@ -287,7 +287,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	struct alphabet_t *next_output_union;
     
     // MIKEL:
-    struct pmf_list_t *P_Qi_Xi;
+    struct pmf_list_t *P_Qi_Xi, *PinputQuan;
 
 	// First we need to know what our training stats are and figure out how many states
 	// to put into each quantizer
@@ -315,22 +315,56 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	prev_qpmf_list = alloc_pmf_list(1, A);
 	apply_quantizer(q_temp, get_cond_pmf(in_pmfs, 0, 0), prev_qpmf_list->pmfs[0]);
     
-    
+    // MIKEL: Initialize P(X_i+1|Q_i) [the input of the quantizer]
+    PinputQuan = alloc_pmf_list(1, A);
     
     // MIKEL: Compute P(Q_0|X_0) using the quantizer of the first column
     P_Qi_Xi = alloc_pmf_list(1, A);
     initialize_P_Qi_Xi(q_temp, get_cond_pmf(in_pmfs, 0, 0), P_Qi_Xi);
     
     // MIKEL: We can Compute P(X_1|Q_0) from the previous expression
-    for (x = 0; x < A->size; x++) {
-        norm += get_probability(P_Qi_Xi->pmfs[x], q) * get_probability(get_cond_pmf(in_pmfs, column, k), x) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], k);
+    
+    for (q = 0; q < A->size; q++) { // for each possible value of Q_0
+        for (k = 0; k < A->size; k++) { // for each possible value of X_1
+            for (x = 0; x < A->size; x++) { // for each value of X_0
+                PinputQuan->pmfs[q]->pmf[k] += get_probability(P_Qi_Xi->pmfs[x], q) * get_probability(get_cond_pmf(in_pmfs, 0, x), k) * get_probability(in_pmfs->marginal_pmfs->pmfs[0], x);
+            }
+        }
+        // normilize the pmf PinputQuan->pmfs[q]
     }
+    // MIKEL: Compute the entropy H(X_1|Q_0 = q) for the state allocation of the quantizer
     
     // MIKEL: Compute the quantizer associated to P(X_1|Q_0)
     
     
     // MIKEL: Once the quantizer is computed start the loop for the rest of the columns
     // MIKEL: First compute P(Q_i|X_i) and then P(X_{i+1}|Q_i)
+    
+    for (column = 1; column < info->columns; ++column) {
+        // RESET PinputQuan and P_Qi_X_i!!!
+        
+        for (k = 0; k < A->size; k++) { // for each possible value of X_i
+            for (q = 0; q < A->size; q++) { // for each possible value of Q_i
+                for (q1 = 0; q1 < A->size; q1++) { // for each value of Q_{i-1}
+                    for (x = 0; x < A->size; x++) { // for each value of X_{i-1}
+                        
+                        P_Qi_Xi->pmfs[k]->pmf[q] += get_probability(PinputQuan->pmfs[q1], x) * get_probability(get_cond_pmf(in_pmfs, 0, x), k) * get_probability(in_pmfs->marginal_pmfs->pmfs[0], x);
+                    }
+                }
+            }
+            // normilize the pmf PinputQuan->pmfs[q]
+        }
+        
+        for (q = 0; q < A->size; q++) { // for each possible value of Q_0
+            for (k = 0; k < A->size; k++) { // for each possible value of X_1
+                for (x = 0; x < A->size; x++) { // for each value of X_0
+                    PinputQuan->pmfs[q]->pmf[k] += get_probability(P_Qi_Xi->pmfs[x], q) * get_probability(get_cond_pmf(in_pmfs, 0, x), k) * get_probability(in_pmfs->marginal_pmfs->pmfs[0], x);
+                }
+            }
+            // normilize the pmf PinputQuan->pmfs[q]
+        }
+        
+    }
     
 	// Iterate over remaining columns and compute the quantizers and quantized PMFs
 	for (column = 1; column < info->columns; ++column) {
