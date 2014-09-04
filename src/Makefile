@@ -13,7 +13,7 @@ TEST_OBJ=$(TEST_SRC:.c=.o)
 CC=gcc
 RM=rm -f
 
-CLFAGS=-O3 -Wall -fomit-frame-pointer -I. -DLINUX
+CLFAGS=-O3 -Wall -fomit-frame-pointer -I../include -DLINUX
 LDFLAGS=-lc -lm
 
 %.o : %.c

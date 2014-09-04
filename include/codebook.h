@@ -8,11 +8,13 @@
 #include "util.h"
 
 #include <stdint.h>
+#include <string.h>
 
 #include "well.h"
 #include "pmf.h"
 #include "distortion.h"
 #include "quantizer.h"
+#include "lines.h"
 
 // Modes for bit allocation
 #define BIT_ALLOC_MODE_INT_STATES		1			// Uses floor(2^H)/ceil(2^H)

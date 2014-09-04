@@ -9,7 +9,6 @@
 #include <math.h>
 #include <stdlib.h>
 #include <float.h>
-#include <malloc.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -17,13 +16,22 @@
 	#include <time.h>
 	#define _stat stat
 	#define _alloca alloca
+#elif __APPLE__
+    #include <time.h>
+    #define _stat stat
+    #define _alloca alloca
 #else
+  #include <malloc.h>
 	#include <windows.h>
 	#define restrict __restrict
 #endif
 
 struct hrtimer_t {
 #ifdef LINUX
+	struct timespec start;
+	struct timespec stop;
+	struct timespec res;
+#elif __APPLE__
 	struct timespec start;
 	struct timespec stop;
 	struct timespec res;
