@@ -90,7 +90,8 @@ void free_cond_quantizer_list(struct cond_quantizer_list_t *list) {
  */
 void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t column, const struct alphabet_t *input_union) {
 	list->input_alphabets[column] = duplicate_alphabet(input_union);
-	list->q[column] = (struct quantizer_t **) calloc(input_union->size, sizeof(struct quantizer_t *));
+	// Low and high quantizer per element of the input union
+	list->q[column] = (struct quantizer_t **) calloc(input_union->size*2, sizeof(struct quantizer_t *));
 }
 
 /**
@@ -123,9 +124,10 @@ struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint3
  * Stores the given quantizer at the appropriate index corresponding to the left context symbol given
  * for the specific column
  */
-void store_cond_quantizer(struct quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
+void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
-	list->q[column][idx] = q;
+	list->q[column][2*idx] = lo;
+	list->q[column][2*idx + 1] = hi;
 }
 
 /**
@@ -318,7 +320,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	
 	// For the first column, quantizer isn't conditional, so find it directly
 	q_temp = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo_states[0], &mse);
-	store_cond_quantizer(q_temp, q_list, 0, 0);
+	store_cond_quantizers(q_temp, NULL, q_list, 0, 0);
 	total_mse = mse;
 
 //	printf("MSE for column 0: %f\n", mse);
@@ -382,7 +384,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			// Find and save quantizer
 			find_states(get_entropy(xpmf_list->pmfs[q]) * comp, &hi, &lo, &ratio);
 			q_temp = generate_quantizer(xpmf_list->pmfs[q], dist, lo_states[column], &mse);
-			store_cond_quantizer(q_temp, q_list, column, q);
+			store_cond_quantizers(q_temp, NULL, q_list, column, q);
 
 			// Find the PMF of the quantizer's output
 			apply_quantizer(q_temp, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);

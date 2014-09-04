@@ -60,7 +60,7 @@ void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t col
 struct pmf_t *get_cond_pmf(struct cond_pmf_list_t *list, uint32_t column, symbol_t prev);
 struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
 struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
-void store_cond_quantizer(struct quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
+void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 
 // Meat of the implementation
 void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
