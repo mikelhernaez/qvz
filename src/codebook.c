@@ -265,6 +265,36 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
 	*ratio = (entropy - h_hi) / (h_lo - h_hi);
 }
 
+
+void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio){
+    
+    symbol_t x;
+    
+    uint32_t q, idx;
+    
+    for (x = 0; x < q_lo->alphabet->size; x++) {
+        
+        for (idx = 0; idx < q_lo->output_alphabet->size; idx++) {
+        
+            q = get_symbol_index(q_lo->output_alphabet, idx);
+            
+            if ("X QUANTIZE TO Q IN q_lo")
+                q_x_pmf->pmfs[x]->pmf[q] += ratio;
+        }
+        
+        for (idx = 0; idx < q_hi->output_alphabet->size; idx++) {
+            
+            q = get_symbol_index(q_hi->output_alphabet, idx);
+            
+            if ("X QUANTIZE TO Q IN q_hi")
+                q_x_pmf->pmfs[x]->pmf[q] += (1-ratio);
+        }
+        
+    }
+    
+    
+}
+
 /**
  * Given the statistics calculated before, we need to compute the entire codebook's worth of
  * quantizers, as well as all of the PMFs and related stats
@@ -274,11 +304,11 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// Stuff for state allocation and mixing
 	uint32_t *hi_states, *lo_states;
 	uint32_t hi, lo;
-	double ratio;
+	double ratio, Prob;
 
 	// Miscellaneous variables
-	uint32_t column, i, j, k, x;
-	symbol_t q;
+	uint32_t column, i, j, k;
+	symbol_t q, x;
 	double qnorm, norm, mse, column_mse, total_mse;
 
 	// Output list of conditional quantizers
@@ -288,8 +318,12 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	const struct alphabet_t *A = in_pmfs->alphabet;
 
 	// Temporary/extra pointers
-	struct quantizer_t *q_temp;
+	struct quantizer_t *q_lo;
+    struct quantizer_t *q_hi;
 	struct pmf_t *pmf_temp;
+    
+    // List of conditionally quantized PMFs for a given quantizer Q_{i-1}
+	struct pmf_list_t *qpmf_quan_list;
 
 	// List of conditionally quantized PMFs after quantizer has been added out
 	struct pmf_list_t *xpmf_list;
@@ -317,12 +351,35 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// alphabet internally so we don't need to worry about duplicating it
 	q_alphabet = alloc_alphabet(1);
 	cond_quantizer_init_column(q_list, 0, q_alphabet);
+    
+    
+    
+    
+    // I START FROM HERE THE NEW IMPLEMENTATION //
+    
+    
+    // For the first column, quantizer isn't conditional, so find it directly
+    
+    // Compute States for hi and lo, and ratio for the quantizers
+    find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)), &hi, &lo, &ratio);
+	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &mse);
+    q_hi = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, hi, &mse);
 	
-	// For the first column, quantizer isn't conditional, so find it directly
-	q_temp = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo_states[0], &mse);
-	store_cond_quantizers(q_temp, NULL, q_list, 0, 0);
+    store_cond_quantizers(q_lo, q_hi, q_list, 0, 0);
 	total_mse = mse;
-
+    
+    // Given the quantizer q_lo and q_hi, compute P(Q_0|X_0,Q_{-1}) [qpmf_quan_list]
+    compute_qpmf_quan_list(q_lo, q_hi, qpmf_quan_list, ratio);
+    // note: In the first iteration P(Q_0|X_0,Q_{-1}) = P(Q_0|X_0), so no need to
+    // compute the latter.
+    
+    
+    
+    
+    
+    
+    
+    
 //	printf("MSE for column 0: %f\n", mse);
 
 	// Initialize a 100% PMF for this quantizer alphabet
