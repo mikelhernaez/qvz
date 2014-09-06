@@ -30,6 +30,50 @@ struct alphabet_t *duplicate_alphabet(const struct alphabet_t *a) {
 }
 
 /**
+ * Merge two alphabets mantaining the order
+ */
+struct alphabet_t* merge_alphabets(struct alphabet_t *a_lo, struct alphabet_t *a_hi){
+    
+    uint32_t idx, small_input_alphabet_size, large_input_alphabet_size, max_output_alphabet_size;
+    
+    struct alphabet_t *rtn = (struct alphabet_t *) calloc(1, sizeof(struct alphabet_t));
+    
+    small_input_alphabet_size = (a_lo->size < a_hi->size)? a_lo->size:a_hi->size;
+    large_input_alphabet_size = (a_lo->size < a_hi->size)? a_hi->size:a_lo->size;
+    
+    max_output_alphabet_size = 2*small_input_alphabet_size + (large_input_alphabet_size - small_input_alphabet_size);
+    
+	rtn->symbols = (symbol_t *) calloc( max_output_alphabet_size, sizeof(symbol_t));
+    
+    for (idx = 0; idx < small_input_alphabet_size; idx++) {
+            
+        if (a_lo->symbols[idx] < a_hi->symbols[idx]){
+                
+            rtn->symbols[rtn->size++] = a_lo->symbols[idx];
+            rtn->symbols[rtn->size++] = a_hi->symbols[idx];
+        }
+        
+        else if (a_lo->symbols[idx] == a_hi->symbols[idx]){
+            
+            rtn->symbols[rtn->size++] = a_lo->symbols[idx];
+        }
+        else{
+            rtn->symbols[rtn->size++] = a_hi->symbols[idx];
+            rtn->symbols[rtn->size++] = a_lo->symbols[idx];
+        }
+    }
+    for (idx = small_input_alphabet_size; idx < large_input_alphabet_size; idx++)
+    {
+        rtn->symbols[rtn->size++] = (a_lo->size > a_hi->size)? a_lo->symbols[idx]:a_hi->symbols[idx];
+        
+    }
+    
+    return rtn;
+    
+    
+}
+
+/**
  * Allocates a PMF structure for the given alphabet, but it does not copy the alphabet
  */
 struct pmf_t *alloc_pmf(const struct alphabet_t *alphabet) {

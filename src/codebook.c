@@ -266,28 +266,23 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
 }
 
 
-void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio){
+void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio, struct alphabet_t *q_output_union){
     
     symbol_t x;
     
-    uint32_t q, idx;
+    uint32_t q_symbol, idx;
     
     for (x = 0; x < q_lo->alphabet->size; x++) {
         
-        for (idx = 0; idx < q_lo->output_alphabet->size; idx++) {
+        for (idx = 0; idx < q_output_union->size; idx++) {
         
-            q = get_symbol_index(q_lo->output_alphabet, idx);
+            q_symbol = q_output_union->symbols[idx];
             
-            if ("X QUANTIZE TO Q IN q_lo")
-                q_x_pmf->pmfs[x]->pmf[q] += ratio;
-        }
-        
-        for (idx = 0; idx < q_hi->output_alphabet->size; idx++) {
+            if (q_lo->q[x] == q_symbol)
+                q_x_pmf->pmfs[x]->pmf[q_symbol] += ratio;
             
-            q = get_symbol_index(q_hi->output_alphabet, idx);
-            
-            if ("X QUANTIZE TO Q IN q_hi")
-                q_x_pmf->pmfs[x]->pmf[q] += (1-ratio);
+            if (q_hi->q[x] == q_symbol)
+                q_x_pmf->pmfs[x]->pmf[q_symbol] += (1-ratio);
         }
         
     }
@@ -295,12 +290,231 @@ void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, 
     
 }
 
+void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_pmfs, uint32_t column, struct pmf_list_t *prev_qpmf_list, struct pmf_list_t *qpmf_quan_list, struct alphabet_t * q_alphabet_union, struct alphabet_t * prev_q_alphabet_union, uint32_t prev_num_quant, struct cond_quantizer_list_t *q_list){
+    
+    symbol_t x;
+    
+    double p_q_xq = 0;
+    
+    uint32_t q_symbol, idx, k, j;
+    
+    struct quantizer_t *q_hi, *q_lo;
+    
+    // compute P(Q_i | X_i)
+    for (k = 0; k < prev_qpmf_list->size; k++)
+    {
+        // compute P(Q_i | X_i = k)
+        for (idx = 0; idx < q_alphabet_union->size; idx++)
+        {
+            q_symbol = q_alphabet_union->symbols[idx];
+            
+            // compute P(Q_i = q_symbol | X_i = k)
+            
+            j = 0;
+            p_q_xq = 0;
+            while (j < prev_num_quant) {
+                
+                // extract quantizers associated with
+                q_lo = get_cond_quantizer_indexed(q_list, column, j);
+                q_hi = get_cond_quantizer_indexed(q_list, column, j);
+                
+                // Given the quantizers q_lo and q_hi, compute P(Q_i = q_symbol|X_i = k ,Q_{i-1} = )
+                
+                if (q_lo->q[k] == q_symbol)
+                    p_q_xq += ratio;
+                
+                if (q_hi->q[k] == q_symbol)
+                    p_q_xq += (1-ratio);
+                
+            
+                for (x = 0; x < qpmf_list->size; ++x) {
+                
+                    qpmf_list->pmfs[q_symbol]->pmf[x] += get_probability(qpmf_list->pmfs[x], q_symbol) * get_probability(get_cond_pmf(in_pmfs, column, k), x) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], k);
+                }
+            }
+        }
+        // Normilize P(X_{i+1} | Q_i = q)
+        qpmf_list->pmfs[q_symbol]->pmf_ready = 1;
+        renormalize_pmf(qpmf_list->pmfs[q_symbol]);
+    }
+    
+}
+
+void compute_xpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_pmfs, uint32_t column, struct pmf_list_t *xpmf_list, struct alphabet_t * q_alphabet_union){
+    
+    symbol_t x;
+    
+    uint32_t q_symbol, idx, k;
+    
+    // compute P(X_{i+1} | Q_i)
+    for (idx = 0; idx < q_alphabet_union->size; idx++)
+    {
+        // compute P(X_{i+1} | Q_i = q)
+        q_symbol = q_alphabet_union->symbols[idx];
+        
+        for (k = 0; k < qpmf_list->size; k++)
+        {
+            // compute P(X_{i+1} = k | Q_i = q)
+            
+            for (x = 0; x < qpmf_list->size; ++x) {
+                    
+                xpmf_list->pmfs[q_symbol]->pmf[x] += get_probability(qpmf_list->pmfs[x], q_symbol) * get_probability(get_cond_pmf(in_pmfs, column, k), x) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-1], k);
+            }
+        }
+        // Normilize P(X_{i+1} | Q_i = q)
+        xpmf_list->pmfs[q_symbol]->pmf_ready = 1;
+        renormalize_pmf(xpmf_list->pmfs[q_symbol]);
+    }
+    
+}
+
+/**
+ * Given the statistics calculated before, we need to compute the entire codebook's worth of
+ * quantizers, as well as all of the PMFs and related stats
+ */
+struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
+    
+	// Stuff for state allocation and mixing
+	uint32_t hi, lo;
+	double ratio;
+    
+	// Miscellaneous variables
+	uint32_t column, j, prev_num_quant;
+	symbol_t q_symbol;
+	double mse;
+    
+	// Output list of conditional quantizers
+	struct cond_quantizer_list_t *q_list = alloc_conditional_quantizer_list(info->columns);
+    
+	// Constant alphabet of all possible input symbols
+	const struct alphabet_t *A = in_pmfs->alphabet;
+    
+	// Temporary/extra pointers
+	struct quantizer_t *q_lo;
+    struct quantizer_t *q_hi;
+    
+    // List of conditionally quantized PMFs for a given quantizer Q_{i-1}
+	struct pmf_list_t *qpmf_quan_list;
+    
+	// List of conditionally quantized PMFs after quantizer has been added out
+	struct pmf_list_t *xpmf_list;
+    
+	// List of conditionally quantized PMFs after the next quantizer was applied
+	struct pmf_list_t *qpmf_list;
+	struct pmf_list_t *prev_qpmf_list;
+    
+    
+	// Alphabet of all possible quantizer outputs from the previous column
+	struct alphabet_t *q_output_union;
+    
+    
+    // For the column 0 the quantizers aren't conditional, so find them directly
+    
+    // Compute number of states for hi and lo, and ratio for the quantizers
+    find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)), &hi, &lo, &ratio);
+	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &mse);
+    q_hi = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, hi, &mse);
+	
+    store_cond_quantizers(q_lo, q_hi, q_list, 0, 0);
+    
+    
+    // Start with the column 1 (It is also a special case)
+    
+    // Merge the output alphabets of the previous two quantizers
+    q_output_union = merge_alphabets(q_hi->output_alphabet, q_lo->output_alphabet);
+    
+    // Initialize the new pmfs
+    qpmf_list = alloc_pmf_list(A->size, q_output_union);
+    qpmf_quan_list = alloc_pmf_list(A->size, q_output_union);
+    xpmf_list = alloc_pmf_list(q_output_union->size, A);
+    
+    // Given the quantizer q_lo and q_hi, compute P(Q_0|X_0,Q_{-1}) [qpmf_quan_list]
+    compute_qpmf_quan_list(q_lo, q_hi, qpmf_quan_list, ratio, q_output_union);
+    
+    // note: In this case P(Q_0|X_0,Q_{-1}) = P(Q_0|X_0), so no need to
+    // compute the latter.
+    
+    // Compute P(X_{i+1}|Q_i)
+    compute_xpmf_list(qpmf_quan_list, in_pmfs, 1, xpmf_list, q_output_union);
+    
+    // for each previous value Q_i compute the quantizers
+    for (j = 0; j < q_output_union->size; ++j) {
+        q_symbol = q_output_union->symbols[j];
+        
+        // Find and save quantizers
+        find_states(get_entropy(xpmf_list->pmfs[q_symbol]) * comp, &hi, &lo, &ratio);
+        q_lo = generate_quantizer(xpmf_list->pmfs[q_symbol], dist, lo, &mse);
+        q_hi = generate_quantizer(xpmf_list->pmfs[q_symbol], dist, hi, &mse);
+        store_cond_quantizers(q_lo, q_hi, q_list, 1, q_symbol);
+    }
+    
+    // free the used pmfs and alphabet (do not free prev_qpmf_list in this case as it's the first assignment).
+    prev_num_quant = q_output_union->size*2;
+    free(q_output_union);
+    
+    prev_qpmf_list = qpmf_list;
+    free_pmf_list(qpmf_quan_list);
+    free_pmf_list(xpmf_list);
+    
+    // Start computing the quantizers of the rest of the columns
+    
+    for (column = 2; column < info->columns; column++) {
+        
+        // Compute the next output alphabet union over all quantizers for this column
+		q_output_union = duplicate_alphabet(get_cond_quantizer_indexed(q_list, column, 0)->output_alphabet);
+		for (j = 1; j < prev_num_quant; ++j) {
+			alphabet_union(q_output_union, get_cond_quantizer_indexed(q_list, column, j)->output_alphabet, q_output_union);
+		}
+        
+        // Initialize the new pmfs
+        qpmf_list = alloc_pmf_list(A->size, q_output_union);
+        qpmf_quan_list = alloc_pmf_list(A->size, q_output_union);
+        xpmf_list = alloc_pmf_list(q_output_union->size, A);
+        
+        
+        // Compute P(Q_{i}|X_i)
+        
+        
+        
+        
+        // Compute P(X_{i+1}|Q_i)
+        compute_xpmf_list(qpmf_quan_list, in_pmfs, column, xpmf_list, q_output_union);
+        
+        // for each previous value Q_i compute the quantizers
+        for (j = 0; j < q_output_union->size; ++j) {
+            
+            q_symbol = q_output_union->symbols[j];
+            
+            // Find and save quantizers
+            find_states(get_entropy(xpmf_list->pmfs[q_symbol]) * comp, &hi, &lo, &ratio);
+            q_lo = generate_quantizer(xpmf_list->pmfs[q_symbol], dist, lo, &mse);
+            q_hi = generate_quantizer(xpmf_list->pmfs[q_symbol], dist, hi, &mse);
+            store_cond_quantizers(q_lo, q_hi, q_list, 1, q_symbol);
+        }
+        
+        // deallocated the memory of the used pmfs and alphabet
+        prev_num_quant = q_output_union->size*2;
+        free(q_output_union);
+        free_pmf_list(prev_qpmf_list);
+		prev_qpmf_list = qpmf_list;
+		free_pmf_list(qpmf_quan_list);
+        free_pmf_list(xpmf_list);
+
+    }
+    
+	// Final cleanup, things we saved at the end of the final iteration that aren't needed
+	free_pmf_list(qpmf_list);
+    
+	// TODO: Generate a codebook-format organization of the quantizers for quick lookup during encoding
+	return q_list;
+}
+
 /**
  * Given the statistics calculated before, we need to compute the entire codebook's worth of
  * quantizers, as well as all of the PMFs and related stats
  * TODO: Add hi states to generation
  */
-struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
+/*struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
 	// Stuff for state allocation and mixing
 	uint32_t *hi_states, *lo_states;
 	uint32_t hi, lo;
@@ -351,33 +565,6 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// alphabet internally so we don't need to worry about duplicating it
 	q_alphabet = alloc_alphabet(1);
 	cond_quantizer_init_column(q_list, 0, q_alphabet);
-    
-    
-    
-    
-    // I START FROM HERE THE NEW IMPLEMENTATION //
-    
-    
-    // For the first column, quantizer isn't conditional, so find it directly
-    
-    // Compute States for hi and lo, and ratio for the quantizers
-    find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)), &hi, &lo, &ratio);
-	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &mse);
-    q_hi = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, hi, &mse);
-	
-    store_cond_quantizers(q_lo, q_hi, q_list, 0, 0);
-	total_mse = mse;
-    
-    // Given the quantizer q_lo and q_hi, compute P(Q_0|X_0,Q_{-1}) [qpmf_quan_list]
-    compute_qpmf_quan_list(q_lo, q_hi, qpmf_quan_list, ratio);
-    // note: In the first iteration P(Q_0|X_0,Q_{-1}) = P(Q_0|X_0), so no need to
-    // compute the latter.
-    
-    
-    
-    
-    
-    
     
     
 //	printf("MSE for column 0: %f\n", mse);
@@ -517,7 +704,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// TODO: Generate a codebook-format organization of the quantizers for quick lookup during encoding
 	return q_list;
 }
-
+*/
 // Legacy stuff for the current version; this should be updated as things are implemented
 // using the new C-based calculations
 

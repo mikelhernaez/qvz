@@ -73,6 +73,7 @@ uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol);
 
 // Compute the union of two alphabets
 void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, struct alphabet_t *result);
+struct alphabet_t* merge_alphabets(struct alphabet_t *a_lo, struct alphabet_t *a_hi);
 
 // Display routines
 void print_alphabet(const struct alphabet_t *);
