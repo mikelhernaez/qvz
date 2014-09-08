@@ -17,6 +17,7 @@ struct quantizer_t {
 	const struct alphabet_t *restrict alphabet;
 	struct alphabet_t *restrict output_alphabet;
 	symbol_t *restrict q;
+    double ratio;
 };
 
 // Memory management
@@ -24,7 +25,7 @@ struct quantizer_t *alloc_quantizer(const struct alphabet_t *);
 void free_quantizer(struct quantizer_t *);
 
 // Generates a quantizer via optimization
-struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states, double *restrict dist_out);
+struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states, double *restrict dist_out, double ratio);
 
 // Calculate the output pmf when the quantizer is applied to the input pmf
 struct pmf_t *apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_t *restrict output);

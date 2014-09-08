@@ -30,7 +30,7 @@ void free_quantizer(struct quantizer_t *q) {
  
  // MIKEL: I see now the point of the second case of how to compute the number of states, as one might want 2^S states so that no bit is wasted.
  // MIKEL: However, if we use arithmetic encoding over the binary alphabet, it will take care of the bit "inequality".
-struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states, double *restrict dist_out) {
+struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states, double *restrict dist_out, double ratio) {
 	struct quantizer_t *q = alloc_quantizer(pmf->alphabet);
 	uint32_t changed = 1;
 	uint32_t iter = 0;
@@ -132,6 +132,8 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 		*dist_out = mse;
 	}
 
+    q->ratio = ratio;
+    
 	return q;
 }
 
