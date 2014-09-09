@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
 
 	stop_timer(&timer);
 	printf("Expected MSE: %f\n", mse); 
-	printf("Elapsed: %f seconds", get_timer_interval(&timer));
+	printf("Elapsed: %f seconds\n", get_timer_interval(&timer));
 
 #ifndef LINUX
 	system("pause");
