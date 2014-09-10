@@ -54,7 +54,7 @@ struct cond_quantizer_list_t *alloc_conditional_quantizer_list(uint32_t columns)
 	rtn->columns = columns;
 	rtn->input_alphabets = (struct alphabet_t **) calloc(columns, sizeof(struct alphabet_t *));
 	rtn->q = (struct quantizer_t ***) calloc(columns, sizeof(struct quantizer_t **));
-    rtn->ratio = (double *) calloc(columns, sizeof(double));
+    rtn->ratio = (double **) calloc(columns, sizeof(double *));
 	return rtn;
 }
 
@@ -73,9 +73,11 @@ void free_cond_quantizer_list(struct cond_quantizer_list_t *list) {
 			}
 			free_alphabet(list->input_alphabets[i]);
 			free(list->q[i]);
+			free(list->ratio[i]);
 		}
 	}
 
+	free(list->ratio);
 	free(list->q);
 	free(list->input_alphabets);
 	free(list);
@@ -93,6 +95,8 @@ void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t col
 	list->input_alphabets[column] = duplicate_alphabet(input_union);
 	// Low and high quantizer per element of the input union
 	list->q[column] = (struct quantizer_t **) calloc(input_union->size*2, sizeof(struct quantizer_t *));
+	// One ratio per element of input union
+	list->ratio[column] = (double *) calloc(input_union->size, sizeof(double));
 }
 
 /**
@@ -129,7 +133,7 @@ void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
 	list->q[column][2*idx] = lo;
 	list->q[column][2*idx + 1] = hi;
-    list->ratio[column] = lo->ratio;
+    list->ratio[column][idx] = lo->ratio;
 }
 
 /**
@@ -165,6 +169,7 @@ void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *p
 /**
  * Calculates the integer number of states to use for each column according to the estimate
  * of conditional entropy from the baseline statistics
+ * @deprecated will be removed as soon as the new version is working
  */
 void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t **high_out, uint32_t **low_out, double **ratio_out, uint32_t mode) {
 	uint32_t *high = (uint32_t *) calloc(pmf_list->columns, sizeof(uint32_t));

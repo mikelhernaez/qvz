@@ -44,7 +44,7 @@ struct cond_quantizer_list_t {
 	uint32_t columns;
 	struct alphabet_t **input_alphabets;
 	struct quantizer_t ***q;
-	double *ratio;
+	double **ratio;
 };
 
 // Memory management
