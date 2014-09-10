@@ -19,7 +19,6 @@
 #define SYMBOLS 41
 
 // Default file names if none are provided on the command line
-const char *default_codebook = "codebook.txt";
 const char *default_input = "quality_lines.txt";
 const char *default_output = "c_bitpacked_quality_lossy.txt";
 
@@ -49,13 +48,13 @@ int main(int argc, char **argv) {
 	struct cond_quantizer_list_t *qlist;
 	uint32_t status;
 	struct hrtimer_t stats, encoding, total;
-	const char *codebook_name, *input_name, *output_name;
+	const char *input_name, *output_name;
 	struct quantizer_t *q;
 
 	// Check for arguments and get file names
-	if (argc != 4) {
+	if (argc != 3) {
 		// Print usage guidelines
-		printf("Usage: %s [codebook] [input file] [output file]\n", argv[0]);
+		printf("Usage: %s [input file] [output file]\n", argv[0]);
 		
 		// Attempted to run from command line but not all arguments are present
 		if (argc > 1) {
@@ -63,23 +62,18 @@ int main(int argc, char **argv) {
 			exit(1);
 		}
 		else {
-			printf("Using default codebook: %s\nDefault input file: %s\nDefault output file: %s.\n", default_codebook, default_input, default_output);
-			codebook_name = default_codebook;
+			printf("Using default input file: %s\nDefault output file: %s.\n", default_input, default_output);
 			input_name = default_input;
 			output_name = default_output;
 		}
 	}
 	else {
-		codebook_name = argv[1];
-		input_name = argv[2];
-		output_name = argv[3];
+		input_name = argv[1];
+		output_name = argv[2];
 	}
 
 	start_timer(&total);
 	start_timer(&stats);
-
-	// Read the codebook file and find out how many columns it is configured for
-	//columns = read_codebook(codebook_name, &cb_list, SYMBOLS);
 
 	// Load file statistics and find statistics for the training data
 	status = load_file(input_name, &training_file, 1000000);
