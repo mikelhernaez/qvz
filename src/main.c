@@ -26,7 +26,7 @@ const char *default_output = "c_bitpacked_quality_lossy.txt";
  * Actually does the encoding (and also tests decoding to ensure correctness)
  */
 int main(int argc, char **argv) {
-	FILE *fp, *fbitout; //, *fref;
+	FILE *fp, *fbitout, *fref;
 	uint32_t columns;
 
 	// Old variables, might not all be needed as we improve the implementation
@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
 	// Now, open the input file and the output file
 	fp = fopen(input_name, "rt");
 	fbitout = fopen(output_name, "wb");
-//	fref = fopen("ref.txt", "wt");
+	fref = fopen("ref.txt", "wt");
 	if (!fp) {
 		perror("Unable to open input file");
 		exit(1);
@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
 		// Quantize and calculate error simultaneously
 		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
 		outline[0] = q->q[line[0]-33];
-		precodeline[0] = outline[0];
+		precodeline[0] = outline[0]+33;
 		error = (line[0] - outline[0] - 33)*(line[0] - outline[0] - 33);
 		state_enc = find_state_encoding(q, outline[0]);
 		bits[0] = cb_log2(q->output_alphabet->size);
@@ -184,8 +184,8 @@ int main(int argc, char **argv) {
 			u += 1;
 		fwrite(stateline, sizeof(char), u, fbitout);
 //		fwrite(outline, sizeof(char), columns, fbitout);
-//		fwrite(precodeline, sizeof(char), columns, fref);
-//		fwrite("\n", 1, 1, fref);
+		fwrite(precodeline, sizeof(char), columns, fref);
+		fwrite("\n", 1, 1, fref);
 
 		// Get next line from file
 		j += 1;
