@@ -731,7 +731,7 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 
 	// Next line is the ratio between states
 	for (i = 0; i < columns; ++i) {
-		linebuf[i] = ((uint8_t)(quantizers->ratio[i]*100)) + 33;
+		linebuf[i] = ((uint8_t)(quantizers->ratio[i][0]*100)) + 33;
 	}
 	fwrite(linebuf, sizeof(char), columns, fp);
 	fwrite(eol, sizeof(char), 1, fp);
@@ -893,6 +893,17 @@ void generate_uniques(struct codebook_t *cb) {
 }
 
 /**
+ * Selects a quantizer for the given column from the quantizer list with the appropriate ratio
+ */
+struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
+	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
+	if (well_1024a(&list->well) % 100 >= list->ratio[column][idx]) {
+		return list->q[column][2*idx+1];
+	}
+	return list->q[column][2*idx];
+}
+
+/**
  * Selects a codebook for the given column from the codebook list with the appropriate ratio
  */
 struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column, uint8_t prev_value) {
@@ -904,9 +915,17 @@ struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column
 }
 
 /**
+ * Converts a quality score into a state encoded value, which is the same as doing a symbol index lookup
+ * in the output alphabet. This needs to be inlined.
+ */
+uint32_t find_state_encoding(struct quantizer_t *q, symbol_t value) {
+	return get_symbol_index(q->output_alphabet, value);
+}
+
+/**
  * Converts the quality score into a state number that can be stored in fewer bits
  * @param value is an ascii character to be converted into a numbered state
- */
+ * @deprecated old codebooks, remove
 uint8_t find_state_encoding(struct codebook_t *codebook, uint8_t value) {
 	uint8_t u;
 
@@ -916,9 +935,11 @@ uint8_t find_state_encoding(struct codebook_t *codebook, uint8_t value) {
 	}
 	return u;
 }
+*/
 
 /**
  * Displays a codebook on STDOUT
+ * @deprecated, remove as the quantizer print methods handle this now
  */
 void print_codebook(struct codebook_t *cb) {
 	uint8_t s = 0;

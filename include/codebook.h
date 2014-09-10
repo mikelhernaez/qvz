@@ -45,6 +45,7 @@ struct cond_quantizer_list_t {
 	struct alphabet_t **input_alphabets;
 	struct quantizer_t ***q;
 	double **ratio;
+	struct well_state_t well;
 };
 
 // Memory management
@@ -61,6 +62,8 @@ struct pmf_t *get_cond_pmf(struct cond_pmf_list_t *list, uint32_t column, symbol
 struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
 struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
+struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
+uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 
 // Meat of the implementation
 void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
@@ -101,7 +104,6 @@ void generate_uniques(struct codebook_t *cb);
 
 // Operational functions
 struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column, uint8_t prev_value);
-uint8_t find_state_encoding(struct codebook_t *codebook, uint8_t value);
 
 // Debugging
 void print_codebook(struct codebook_t *cb);
