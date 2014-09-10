@@ -135,23 +135,19 @@ int main(int argc, char **argv) {
 		q = choose_quantizer(qlist, 0, 0);
 
 		// Quantize and calculate error simultaneously
+		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
 		outline[0] = q->q[line[0]-33];
 		precodeline[0] = outline[0];
-		error = (line[0] - outline[0])*(line[0] - outline[0]);
+		error = (line[0] - outline[0] + 33)*(line[0] - outline[0] + 33);
 		state_enc = find_state_encoding(q, outline[0]);
 		bits[0] = cb_log2(q->output_alphabet->size);
 
 		for (s = 1; s < columns; ++s) {
 			// Quantize and compute error for MSE
-			q = choose_quantizer(qlist, s, outline[s-1]-33);
+			q = choose_quantizer(qlist, s, outline[s-1]);
 			outline[s] = q->q[line[s]-33];
-			precodeline[s] = outline[s];
-			error += (line[s] - outline[s])*(line[s] - outline[s]);
-
-			// Check for invalid encoding
-			if (outline[s] == ' ') {
-				printf("Codebook produced a space for column %d on line %d. Previous symbol: '%c'\n", s, j, outline[s-1]);
-			}
+			precodeline[s] = outline[s]+33;
+			error += (line[s] - outline[s] + 33)*(line[s] - outline[s] + 33);
 
 			// Save the state encoded version over the previous value
 			outline[s-1] = state_enc;

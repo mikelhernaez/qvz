@@ -137,6 +137,26 @@ void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *
 }
 
 /**
+ * Selects a quantizer for the given column from the quantizer list with the appropriate ratio
+ */
+struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
+	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
+	assert(idx != ALPHABET_SYMBOL_NOT_FOUND);
+	if (well_1024a(&list->well) / ((double)UINT32_MAX) >= list->ratio[column][idx]) {
+		return list->q[column][2*idx+1];
+	}
+	return list->q[column][2*idx];
+}
+
+/**
+ * Converts a quality score into a state encoded value, which is the same as doing a symbol index lookup
+ * in the output alphabet. This needs to be inlined.
+ */
+uint32_t find_state_encoding(struct quantizer_t *q, symbol_t value) {
+	return get_symbol_index(q->output_alphabet, value);
+}
+
+/**
  * Given a quality info struct, which is assumed to have loaded the training set, and a
  * set of output conditional pmf structures, calculate the statistics of the data
  */
@@ -893,17 +913,6 @@ void generate_uniques(struct codebook_t *cb) {
 }
 
 /**
- * Selects a quantizer for the given column from the quantizer list with the appropriate ratio
- */
-struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
-	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
-	if (well_1024a(&list->well) % 100 >= list->ratio[column][idx]) {
-		return list->q[column][2*idx+1];
-	}
-	return list->q[column][2*idx];
-}
-
-/**
  * Selects a codebook for the given column from the codebook list with the appropriate ratio
  */
 struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column, uint8_t prev_value) {
@@ -912,14 +921,6 @@ struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column
 		return &list->high[column][prev_value];
 	}
 	return &list->low[column][prev_value];
-}
-
-/**
- * Converts a quality score into a state encoded value, which is the same as doing a symbol index lookup
- * in the output alphabet. This needs to be inlined.
- */
-uint32_t find_state_encoding(struct quantizer_t *q, symbol_t value) {
-	return get_symbol_index(q->output_alphabet, value);
 }
 
 /**
