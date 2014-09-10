@@ -187,91 +187,6 @@ void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *p
 }
 
 /**
- * Calculates the integer number of states to use for each column according to the estimate
- * of conditional entropy from the baseline statistics
- * @deprecated will be removed as soon as the new version is working
- */
-void find_bit_allocation(struct cond_pmf_list_t *pmf_list, double comp, uint32_t **high_out, uint32_t **low_out, double **ratio_out, uint32_t mode) {
-	uint32_t *high = (uint32_t *) calloc(pmf_list->columns, sizeof(uint32_t));
-	uint32_t *low = (uint32_t *) calloc(pmf_list->columns, sizeof(uint32_t));
-	double *ratio = (double *) calloc(pmf_list->columns, sizeof(double));
-	double *entropies = (double *) _alloca(pmf_list->columns*sizeof(double));
-	double h_lo, h_hi;
-	uint32_t i, j;
-	struct pmf_list_t *uc_pmf_list = alloc_pmf_list(pmf_list->columns, pmf_list->alphabet);
-	struct pmf_t *pmf_temp;
-
-	*high_out = high;
-	*low_out = low;
-	*ratio_out = ratio;
-
-	// Column 0 pmf is the unconditional one, copy it to the unconditional pmf list
-	pmf_temp = get_cond_pmf(pmf_list, 0, 0);
-	combine_pmfs(pmf_temp, pmf_temp, 1.0, 0.0, uc_pmf_list->pmfs[0]);
-
-	// Find unconditional pmfs for each column remaining
-	for (i = 1; i < pmf_list->columns; ++i) {
-		for (j = 0; j < pmf_list->alphabet->size; ++j) {
-			pmf_temp = get_cond_pmf(pmf_list, i, j);
-			combine_pmfs(uc_pmf_list->pmfs[i], pmf_temp, 1.0, get_probability(uc_pmf_list->pmfs[i-1], j), uc_pmf_list->pmfs[i]);
-		}
-	}
-
-	// Alloca doesn't zero memory for us
-	memset(entropies, 0, pmf_list->columns*sizeof(double));
-
-	// Column 0 is handled specially because it only has one left context
-	entropies[0] = get_entropy(get_cond_pmf(pmf_list, 0, 0)) * comp;
-
-	// Rest of the columns are handled identically
-	for (i = 1; i < pmf_list->columns; ++i) {
-		pmf_temp = uc_pmf_list->pmfs[i-1];
-		for (j = 0; j < pmf_list->alphabet->size; ++j) {
-			entropies[i] += get_probability(pmf_temp, j) * get_entropy(get_cond_pmf(pmf_list, i, j));
-		}
-		entropies[i] = entropies[i] * comp;
-	}
-	
-	// MIKEL: The conditional entropies are computed.
-	// MIKEL: Instead of using the average entropy (entropy[i]), we need to use the individual conditional entropies.
-	// MIKEL: If I'm not mistaken, "get_entropy(get_cond_pmf(pmf_list, i, j))" is exactly what we need. 
-	// MIKEL: So we need to change from entropies[i] to entropies[i][j].
-	
-	// Compute number of states used based on mode parameter
-	// r = ratio:
-	// H = rH_lo + (1-r)H_hi
-	// H - H_hi = r(H_lo - H_hi)
-	// r = (H - H_hi) / (H_lo - H_hi)
-	for (i = 0; i < pmf_list->columns; ++i) {
-		switch(mode) {
-			case BIT_ALLOC_MODE_INT_STATES:
-				h_lo = pow(2, entropies[i]);
-				low[i] = (uint32_t) h_lo;
-				high[i] = (uint32_t) ceil(h_lo);
-				h_lo = log2((double)low[i]);
-				h_hi = log2((double)high[i]);
-				ratio[i] = (entropies[i] - h_hi) / (h_lo - h_hi);
-				break;
-			case BIT_ALLOC_MODE_INT_POWER:
-				h_lo = floor(entropies[i]);
-				h_hi = ceil(entropies[i]);
-				low[i] = (uint32_t) pow(2, h_lo);
-				high[i] = (uint32_t) pow(2, h_hi);
-				ratio[i] = (entropies[i] - h_hi) / (h_lo - h_hi);
-				break;
-			case BIT_ALLOC_MODE_NO_MIX:
-			default:
-				ratio[i] = 1;
-				low[i] = (uint32_t) floor(pow(2, entropies[i]));
-				high[i] = 0;
-				break;
-		}
-	}
-	
-	free_pmf_list(uc_pmf_list);
-}
-
-/**
  * Does state calculation, producing hi, lo, and ratio, for the given entropy value
  * @param entropy The entropy to use for state calculation
  * @param high Output, number of hi states stored here
@@ -291,7 +206,6 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
 	h_hi = log2((double)*high);
 	*ratio = (entropy - h_hi) / (h_lo - h_hi);
 }
-
 
 void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio, struct alphabet_t *q_output_union){
     
@@ -404,8 +318,7 @@ void compute_xpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
  * Given the statistics calculated before, we need to compute the entire codebook's worth of
  * quantizers, as well as all of the PMFs and related stats
  */
-struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
-    
+struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, double *expected_distortion) {
 	// Stuff for state allocation and mixing
 	uint32_t hi, lo;
 	double ratio;
@@ -442,7 +355,6 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
     calculate_statistics(info, in_pmfs);
     
     // For the column 0 the quantizers aren't conditional, so find them directly
-    
     q_output_union = alloc_alphabet(1);
     cond_quantizer_init_column(q_list, 0, q_output_union);
     

@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, BIT_ALLOC_MODE_NO_MIX, NULL);
+	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, NULL);
 	columns = qlist->columns;
 	stop_timer(&stats);
 	start_timer(&encoding);
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
 		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
 		outline[0] = q->q[line[0]-33];
 		precodeline[0] = outline[0];
-		error = (line[0] - outline[0] + 33)*(line[0] - outline[0] + 33);
+		error = (line[0] - outline[0] - 33)*(line[0] - outline[0] - 33);
 		state_enc = find_state_encoding(q, outline[0]);
 		bits[0] = cb_log2(q->output_alphabet->size);
 
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
 			q = choose_quantizer(qlist, s, outline[s-1]);
 			outline[s] = q->q[line[s]-33];
 			precodeline[s] = outline[s]+33;
-			error += (line[s] - outline[s] + 33)*(line[s] - outline[s] + 33);
+			error += (line[s] - outline[s] - 33)*(line[s] - outline[s] - 33);
 
 			// Save the state encoded version over the previous value
 			outline[s-1] = state_enc;
@@ -206,6 +206,10 @@ int main(int argc, char **argv) {
 //	printf("Rate: %f\n", finfo.st_size*8./(((double)j)*columns));
 	printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
 	printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
+
+#ifndef LINUX
+	system("pause");
+#endif
 
 	return 0;
 }
