@@ -204,7 +204,10 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
 	*high = (uint32_t) ceil(h_lo);
 	h_lo = log2((double)*low);
 	h_hi = log2((double)*high);
-	*ratio = (entropy - h_hi) / (h_lo - h_hi);
+	if (h_lo - h_hi == 0)
+		*ratio = 0.0;
+	else
+		*ratio = (entropy - h_hi) / (h_lo - h_hi);
 }
 
 void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio, struct alphabet_t *q_output_union){
