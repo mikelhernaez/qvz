@@ -436,11 +436,10 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
  * quantizers, as well as all of the PMFs and related stats
  * TODO: Add hi states to generation
  */
-/*struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
+struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
 	// Stuff for state allocation and mixing
-	uint32_t *hi_states, *lo_states;
 	uint32_t hi, lo;
-	double ratio, Prob;
+	double ratio;
 
 	// Miscellaneous variables
 	uint32_t column, i, j, k;
@@ -454,12 +453,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	const struct alphabet_t *A = in_pmfs->alphabet;
 
 	// Temporary/extra pointers
-	struct quantizer_t *q_lo;
-    struct quantizer_t *q_hi;
-	struct pmf_t *pmf_temp;
-    
-    // List of conditionally quantized PMFs for a given quantizer Q_{i-1}
-	struct pmf_list_t *qpmf_quan_list;
+	struct quantizer_t *q_lo, *q_temp;
 
 	// List of conditionally quantized PMFs after quantizer has been added out
 	struct pmf_list_t *xpmf_list;
@@ -481,38 +475,38 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// First we need to know what our training stats are and figure out how many states
 	// to put into each quantizer
 	calculate_statistics(info, in_pmfs);
-	find_bit_allocation(in_pmfs, comp, &hi_states, &lo_states, &q_list->ratio, mode);
 
 	// Set up a quantizer alphabet for column zero. The cond quantizer list duplicates the
 	// alphabet internally so we don't need to worry about duplicating it
 	q_alphabet = alloc_alphabet(1);
 	cond_quantizer_init_column(q_list, 0, q_alphabet);
-    
+	find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)) * comp, &hi, &lo, &ratio);
+    q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &total_mse, ratio);
+	store_cond_quantizers(q_lo, q_lo, q_list, 0, 0);
     
 //	printf("MSE for column 0: %f\n", mse);
 
 	// Initialize a 100% PMF for this quantizer alphabet
 	q_pmf = alloc_pmf(q_alphabet);
 	pmf_increment(q_pmf, 0);
-	q_output_union = duplicate_alphabet(q_temp->output_alphabet);
+	q_output_union = duplicate_alphabet(q_lo->output_alphabet);
 
 	// Previous qpmf list needs to be initialized for a single quantizer's output
 	prev_qpmf_list = alloc_pmf_list(1, A);
-	apply_quantizer(q_temp, get_cond_pmf(in_pmfs, 0, 0), prev_qpmf_list->pmfs[0]);
+	apply_quantizer(q_lo, get_cond_pmf(in_pmfs, 0, 0), prev_qpmf_list->pmfs[0]);
 
 	// Iterate over remaining columns and compute the quantizers and quantized PMFs
 	for (column = 1; column < info->columns; ++column) {
 		// Different approach to calculating xpmf, we should be able to find P(X_c = x | Q_c-1=q) for each
 		// q in the possible list of quantizer outputs for the previous column
 		xpmf_list = alloc_pmf_list(A->size, A);
-//		pmf_temp = alloc_pmf(A);
 		for (j = 0; j < q_output_union->size; ++j) {
 			q = q_output_union->symbols[j];
 
 			// Find normalizing constant for all quantizers that produce this Q symbol
 			qnorm = 0;
 			for (i = 0; i < q_alphabet->size; ++i) {
-				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
+				q_temp = get_cond_quantizer_indexed(q_list, column-1, 2*i);
 				if (alphabet_contains(q_temp->output_alphabet, q)) {
 					qnorm += get_probability(q_pmf, i);
 				}
@@ -520,7 +514,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 
 			// Find appropriate combination of conditional probabilities weighted by quanizer
 			for (i = 0; i < q_alphabet->size; ++i) {
-				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
+				q_temp = get_cond_quantizer_indexed(q_list, column-1, 2*i);
 				for (x = 0; x < A->size; ++x) {
 					norm = 0;
 					for (k = 0; k < A->size; ++k) {
@@ -549,8 +543,8 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 
 			// Find and save quantizer
 			find_states(get_entropy(xpmf_list->pmfs[q]) * comp, &hi, &lo, &ratio);
-			q_temp = generate_quantizer(xpmf_list->pmfs[q], dist, lo_states[column], &mse);
-			store_cond_quantizers(q_temp, NULL, q_list, column, q);
+			q_temp = generate_quantizer(xpmf_list->pmfs[q], dist, lo, &mse, ratio);
+			store_cond_quantizers(q_temp, q_temp, q_list, column, q);
 
 			// Find the PMF of the quantizer's output
 			apply_quantizer(q_temp, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);
@@ -572,7 +566,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 		// Compute the next output alphabet union over all quantizers for this column
 		next_output_union = duplicate_alphabet(get_cond_quantizer_indexed(q_list, column, 0)->output_alphabet);
 		for (j = 1; j < q_output_union->size; ++j) {
-			alphabet_union(next_output_union, get_cond_quantizer_indexed(q_list, column, j)->output_alphabet, next_output_union);
+			alphabet_union(next_output_union, get_cond_quantizer_indexed(q_list, column, 2*j)->output_alphabet, next_output_union);
 		}
 //		printf("Output alphabet union:\n");
 //		print_alphabet(next_output_union);
@@ -604,10 +598,6 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 		free_pmf_list(prev_qpmf_list);
 		prev_qpmf_list = qpmf_list;
 		free_pmf_list(xpmf_list);
-//		for (i = 0; i < q_alphabet->size; ++i) {
-//			free_pmf_list(cq_pmf_list[i]);
-//		}
-//		free(cq_pmf_list);
 
 		free_pmf(q_pmf);
 		q_pmf = next_q_pmf;
@@ -623,10 +613,9 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	if (expected_distortion != NULL)
 		*expected_distortion = total_mse / info->columns;
 
-	// TODO: Generate a codebook-format organization of the quantizers for quick lookup during encoding
 	return q_list;
 }
-*/
+
 // Legacy stuff for the current version; this should be updated as things are implemented
 // using the new C-based calculations
 

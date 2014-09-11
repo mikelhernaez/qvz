@@ -9,9 +9,8 @@
 
 #include "codebook.h"
 
-#define SYMBOLS 41
-
-// Default file names if none are provided on the command line
+// Default file names if none are provided on the command line, for testing in Visual Studio
+// @todo remove from final version
 const char *default_input = "quality_lines.txt";
 const char *default_output = "c_bitpacked_quality_lossy.txt";
 
@@ -76,7 +75,8 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, NULL);
+	qlist = generate_codebooks(&training_file, training_stats, dist, 0., NULL);
+	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0., 0, NULL);
 	columns = qlist->columns;
 	stop_timer(&stats);
 	start_timer(&encoding);

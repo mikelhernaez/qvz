@@ -63,6 +63,7 @@ uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 // Meat of the implementation
 void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
 struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, double *expected_distortion);
+struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion);
 
 // Legacy stuff to be converted still
 
