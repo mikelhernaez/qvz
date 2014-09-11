@@ -75,13 +75,14 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, 0., NULL);
-	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0., 0, NULL);
+	qlist = generate_codebooks(&training_file, training_stats, dist, 0., &distortion);
+//	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0., 0, &distortion);
 	columns = qlist->columns;
 	stop_timer(&stats);
 	start_timer(&encoding);
 
 	printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
+	printf("Expected distortion: %f\n", distortion);
 
 	// Allocate space for the stuff we're going to use to store what is being written to a file
 	line = (char *) calloc(4096, sizeof(char));
@@ -116,6 +117,7 @@ int main(int argc, char **argv) {
 
 	bits_used = 0;
 	j = 0;
+	distortion = 0.0;
 	fgets(line, columns+2, fp);
 	do {
 		// State encoding is offset from the main loop iteration by one because we need

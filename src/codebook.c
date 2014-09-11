@@ -325,7 +325,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// Miscellaneous variables
 	uint32_t column, j;
 	symbol_t q_symbol;
-	double mse;
+	double mse, total_mse;
     
 	// Output list of conditional quantizers
 	struct cond_quantizer_list_t *q_list = alloc_conditional_quantizer_list(info->columns);
@@ -364,7 +364,9 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
     // Compute number of states for hi and lo, and ratio for the quantizers
     find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)) * comp, &hi, &lo, &ratio);
 	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &mse, ratio);
+	total_mse = ratio*mse;
     q_hi = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, hi, &mse, 1-ratio);
+	total_mse += (1-ratio)*mse;
 	
     store_cond_quantizers(q_lo, q_hi, q_list, 0, 0);
     
@@ -408,7 +410,9 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
             // Find and save quantizers
             find_states(get_entropy(xpmf_list->pmfs[j]) * comp, &hi, &lo, &ratio);
             q_lo = generate_quantizer(xpmf_list->pmfs[j], dist, lo, &mse, ratio);
+			total_mse = ratio*mse;
             q_hi = generate_quantizer(xpmf_list->pmfs[j], dist, hi, &mse, 1 - ratio);
+			total_mse += (1-ratio)*mse;
             store_cond_quantizers(q_lo, q_hi, q_list, column, q_symbol);
         }
         
@@ -427,7 +431,9 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	free_pmf_list(qpmf_list);
     free(q_output_union);
     
-	// TODO: Generate a codebook-format organization of the quantizers for quick lookup during encoding
+	if (expected_distortion)
+		*expected_distortion = total_mse;
+
 	return q_list;
 }
 
