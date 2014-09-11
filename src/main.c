@@ -1,20 +1,13 @@
 
-#define _CRT_SECURE_NO_WARNINGS
+#include "util.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#ifdef LINUX
-	#define _stat stat
-#endif
 
 #include "codebook.h"
-#include "util.h"
 
 #define SYMBOLS 41
 
