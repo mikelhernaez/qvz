@@ -75,8 +75,8 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, 0.25, &distortion);
-//	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0., 0, &distortion);
+//	qlist = generate_codebooks(&training_file, training_stats, dist, 0.25, &distortion);
+	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0.5, 0, &distortion);
 	columns = qlist->columns;
 	stop_timer(&stats);
 	start_timer(&encoding);
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
 	}
 
 	// Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
-	srand(time(0));
+	srand((uint32_t) time(0));
 	for (s = 0; s < 32; ++s) {
 		qlist->well.state[s] = rand();
 		// Testing with fixed state to look for consistency!

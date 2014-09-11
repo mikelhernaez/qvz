@@ -216,21 +216,45 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
  * @param dist The distortion metric to quantize against
  * @param lo Place to store the pointer to the low quantizer
  * @param hi Place to store the pointer to the high quantizer
- * @param ratio The ratio necessary to combine these two quantizers to achieve the target
+ * @return double The ratio necessary to combine these two quantizers to achieve the target
+ * @todo Add expected distortion calculations
  */
-void optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi, double *ratio) {
+double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi) {
 	struct quantizer_t *q_temp;
-	uint32_t states;
-	double entropy;
+	double lo_entropy, hi_entropy;
+	struct pmf_t *pmf_temp = alloc_pmf(pmf->alphabet);
+	uint32_t states = 1;
+	
+	q_temp = generate_quantizer(pmf, dist, states, NULL);
+	hi_entropy = get_entropy(apply_quantizer(q_temp, pmf, pmf_temp));
+	*hi = q_temp;
+	*lo = alloc_quantizer(pmf->alphabet);
 
-	q_temp = generate_quantizer(pmf, dist, 0, NULL);
+	do {
+		free_quantizer(*lo);
+		*lo = *hi;
+		lo_entropy = hi_entropy;
+		
+		states += 1;
+		q_temp = generate_quantizer(pmf, dist, states, NULL);
+		hi_entropy = get_entropy(apply_quantizer(q_temp, pmf, pmf_temp));
+		*hi = q_temp;
+	} while (hi_entropy < target && states < pmf->alphabet->size);
 
-	while (1) {
+	printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
 
-//	generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &mse, ratio);
-	}
+	// Assign ratio based on how we did against our entropy target
+	if (hi_entropy < target)
+		return 0.0;
+	else if (lo_entropy >= target || hi_entropy == lo_entropy)
+		return 1.0;
+	else
+		return (target - hi_entropy) / (lo_entropy - hi_entropy);
 }
 
+/**
+ * ???
+ */
 void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio, struct alphabet_t *q_output_union){
     
     symbol_t x;
@@ -471,14 +495,13 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
  * TODO: Add hi states to generation
  */
 struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
-	// Stuff for state allocation and mixing
-	uint32_t hi, lo;
-	double ratio;
-
 	// Miscellaneous variables
 	uint32_t column, i, j, k;
 	symbol_t q, x;
 	double qnorm, norm, mse, column_mse, total_mse;
+	double ratio;
+
+	uint32_t hi, lo;
 
 	// Output list of conditional quantizers
 	struct cond_quantizer_list_t *q_list = alloc_conditional_quantizer_list(info->columns);
@@ -487,7 +510,8 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 	const struct alphabet_t *A = in_pmfs->alphabet;
 
 	// Temporary/extra pointers
-	struct quantizer_t *q_lo, *q_temp;
+	struct quantizer_t *q_lo, *q_hi, *q_temp;
+	struct pmf_t *pmf_temp;
 
 	// List of conditionally quantized PMFs after quantizer has been added out
 	struct pmf_list_t *xpmf_list;
@@ -514,11 +538,17 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 	// alphabet internally so we don't need to worry about duplicating it
 	q_alphabet = alloc_alphabet(1);
 	cond_quantizer_init_column(q_list, 0, q_alphabet);
-	find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)) * comp, &hi, &lo, &ratio);
-    q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &total_mse);
+//	pmf_temp = get_cond_pmf(in_pmfs, 0, 0);
+//	ratio = optimize_for_entropy(pmf_temp, dist, get_entropy(pmf_temp)*comp, &q_lo, &q_hi);
+//	q_lo->ratio = ratio;
+//	q_hi->ratio = 1-ratio;
+//	store_cond_quantizers(q_lo, q_lo, ratio, q_list, 0, 0);
+
+	find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0))*comp, &hi, &lo, &ratio);
+	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &total_mse);
 	q_lo->ratio = ratio;
 	store_cond_quantizers(q_lo, q_lo, ratio, q_list, 0, 0);
-    
+
 //	printf("MSE for column 0: %f\n", mse);
 
 	// Initialize a 100% PMF for this quantizer alphabet
@@ -577,18 +607,23 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 			q = q_output_union->symbols[j];
 
 			// Find and save quantizer
-			find_states(get_entropy(xpmf_list->pmfs[q]) * comp, &hi, &lo, &ratio);
-			q_temp = generate_quantizer(xpmf_list->pmfs[q], dist, lo, &mse);
-			q_temp->ratio = ratio;
-			store_cond_quantizers(q_temp, q_temp, ratio, q_list, column, q);
+//			ratio = optimize_for_entropy(xpmf_list->pmfs[q], dist, get_entropy(xpmf_list->pmfs[q])*comp, &q_lo, &q_hi);
+//			q_lo->ratio = ratio;
+//			q_hi->ratio = 1-ratio;
+//			store_cond_quantizers(q_lo, q_lo, ratio, q_list, column, q);
+
+			find_states(get_entropy(xpmf_list->pmfs[q])*comp, &hi, &lo, &ratio);
+			q_lo = generate_quantizer(xpmf_list->pmfs[q], dist, lo, &mse);
+			q_lo->ratio = ratio;
+			store_cond_quantizers(q_lo, q_lo, ratio, q_list, column, q);
 
 			// Find the PMF of the quantizer's output
-			apply_quantizer(q_temp, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);
+			apply_quantizer(q_lo, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);
 
 			// Calculate MSE contribution from this quantizer
 			norm = 0.0;
 			for (i = 0; i < q_alphabet->size; ++i) {
-				q_temp = get_cond_quantizer_indexed(q_list, column-1, i);
+				q_temp = get_cond_quantizer_indexed(q_list, column-1, 2*i);
 				if (alphabet_contains(q_temp->output_alphabet, q)) {
 					norm += get_probability(q_pmf, i) * get_probability(prev_qpmf_list->pmfs[i], q);
 				}
