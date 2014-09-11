@@ -131,7 +131,11 @@ struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint3
  */
 void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
-	list->q[column][2*idx] = lo;
+	store_cond_quantizers_indexed(lo, hi, ratio, list, column, idx);
+}
+
+void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, uint32_t idx) {
+    list->q[column][2*idx] = lo;
 	list->q[column][2*idx + 1] = hi;
     list->ratio[column][idx] = ratio;
 }
@@ -473,7 +477,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*comp, &q_lo, &q_hi);
 			q_lo->ratio = ratio;
 			q_hi->ratio = 1-ratio;
-            store_cond_quantizers(q_lo, q_hi, ratio, q_list, column, q_symbol);
+            store_cond_quantizers_indexed(q_lo, q_hi, ratio, q_list, column, j);
 			
         }
         
