@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, 0., &distortion);
+	qlist = generate_codebooks(&training_file, training_stats, dist, 0.25, &distortion);
 //	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0., 0, &distortion);
 	columns = qlist->columns;
 	stop_timer(&stats);

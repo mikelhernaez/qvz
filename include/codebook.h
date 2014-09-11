@@ -56,12 +56,13 @@ void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t col
 struct pmf_t *get_cond_pmf(struct cond_pmf_list_t *list, uint32_t column, symbol_t prev);
 struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
 struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
-void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
+void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 
 // Meat of the implementation
 void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
+void optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi, double *ratio);
 struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, double *expected_distortion);
 struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion);
 
