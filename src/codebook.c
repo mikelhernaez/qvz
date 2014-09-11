@@ -235,7 +235,7 @@ void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
     
     symbol_t x;
     
-    double p_q_xq = 0;
+    double p_q_xq = 0.0, p_temp = 0.0;
     
     uint32_t q_symbol, idx, k, j, q_prev_symbol;
     
@@ -251,10 +251,9 @@ void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
             
             // compute P(Q_i = q_symbol | X_i = k)
             
-            j = 0;
-            p_q_xq = 0.0;
             for (j = 0; j < prev_q_alphabet_union->size; j++) {
                 
+                p_q_xq = 0.0;
                 // extract the jth quantizers of X_i;
                 q_lo = get_cond_quantizer_indexed(q_list, column-1, 2*j);
                 q_hi = get_cond_quantizer_indexed(q_list, column-1, (2*j)+1);
@@ -269,13 +268,13 @@ void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
                 if (q_hi->q[k] == q_symbol)
                     p_q_xq += q_hi->ratio;
                 
-            
+                p_temp = 0;
                 for (x = 0; x < prev_qpmf_list->size; ++x) {
                 
-                    qpmf_list->pmfs[k]->pmf[idx] += get_probability(prev_qpmf_list->pmfs[x], j) * get_probability(get_cond_pmf(in_pmfs, column-1, x), k) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-2], x);
+                    p_temp += get_probability(prev_qpmf_list->pmfs[x], j) * get_probability(get_cond_pmf(in_pmfs, column-1, x), k) * get_probability(in_pmfs->marginal_pmfs->pmfs[column-2], x);
                 }
                 
-                qpmf_list->pmfs[k]->pmf[idx] *= p_q_xq;
+                qpmf_list->pmfs[k]->pmf[idx] += p_q_xq * p_temp;
             }
         }
         
