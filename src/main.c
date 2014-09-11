@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
 	uint32_t columns;
 
 	// Old variables, might not all be needed as we improve the implementation
-	uint32_t bits_used;
+	uint64_t bits_used;
 	uint32_t j = 0, s = 0, u = 0, k = 0;
 	double distortion = 0.0;
 	uint32_t error = 0;
@@ -75,8 +75,8 @@ int main(int argc, char **argv) {
 	}
 
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-//	qlist = generate_codebooks(&training_file, training_stats, dist, 0.25, &distortion);
-	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0.5, 0, &distortion);
+	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, &distortion);
+//	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0.5, 0, &distortion);
 	columns = qlist->columns;
 	stop_timer(&stats);
 	start_timer(&encoding);
@@ -197,7 +197,7 @@ int main(int argc, char **argv) {
 	printf("MSE: %f\n", distortion);
 //	printf("Filesize: %ld bytes\n", finfo.st_size);
 	printf("Lines: %d\n", j);
-	printf("Total bits used: %d\n", bits_used);
+	printf("Total bits used: %llu\n", bits_used);
 //	printf("Rate: %f\n", finfo.st_size*8./(((double)j)*columns));
 	printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
 	printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));

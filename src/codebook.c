@@ -458,6 +458,8 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
             q_symbol = q_output_union->symbols[j];
             
             // Find and save quantizers
+	
+			/*
             find_states(get_entropy(xpmf_list->pmfs[j]) * comp, &hi, &lo, &ratio);
             q_lo = generate_quantizer(xpmf_list->pmfs[j], dist, lo, &mse);
 			q_lo->ratio = ratio;
@@ -466,6 +468,13 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			q_hi->ratio = 1-ratio;
 			total_mse += (1-ratio)*mse;
             store_cond_quantizers(q_lo, q_hi, ratio, q_list, column, q_symbol);
+			*/
+			
+			ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*comp, &q_lo, &q_hi);
+			q_lo->ratio = ratio;
+			q_hi->ratio = 1-ratio;
+            store_cond_quantizers(q_lo, q_hi, ratio, q_list, column, q_symbol);
+			
         }
         
         // deallocated the memory of the used pmfs and alphabet
@@ -603,19 +612,25 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 		qpmf_list = alloc_pmf_list(q_output_union->size, A);
 		printf("MSE for column %d\n", column);
 		column_mse = 0;
+		next_output_union = alloc_alphabet(0);
 		for (j = 0; j < q_output_union->size; ++j) {
 			q = q_output_union->symbols[j];
 
 			// Find and save quantizer
-//			ratio = optimize_for_entropy(xpmf_list->pmfs[q], dist, get_entropy(xpmf_list->pmfs[q])*comp, &q_lo, &q_hi);
-//			q_lo->ratio = ratio;
-//			q_hi->ratio = 1-ratio;
-//			store_cond_quantizers(q_lo, q_lo, ratio, q_list, column, q);
-
 			find_states(get_entropy(xpmf_list->pmfs[q])*comp, &hi, &lo, &ratio);
 			q_lo = generate_quantizer(xpmf_list->pmfs[q], dist, lo, &mse);
 			q_lo->ratio = ratio;
 			store_cond_quantizers(q_lo, q_lo, ratio, q_list, column, q);
+
+//			ratio = optimize_for_entropy(xpmf_list->pmfs[q], dist, get_entropy(xpmf_list->pmfs[q])*comp, &q_temp, &q_hi);
+//			q_temp->ratio = ratio;
+//			q_hi->ratio = 1-ratio;
+//			store_cond_quantizers(q_lo, q_lo, ratio, q_list, column, q);
+//			store_cond_quantizers(q_temp, q_temp, ratio, q_list, column, q);
+			alphabet_union(next_output_union, q_lo->output_alphabet, next_output_union);
+
+//			print_quantizer(q_lo);
+//			print_quantizer(q_temp);
 
 			// Find the PMF of the quantizer's output
 			apply_quantizer(q_lo, xpmf_list->pmfs[q], qpmf_list->pmfs[j]);
@@ -633,12 +648,6 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 			column_mse += mse * norm;
 		}
 		printf("Column MSE: %f.\n", column_mse);
-
-		// Compute the next output alphabet union over all quantizers for this column
-		next_output_union = duplicate_alphabet(get_cond_quantizer_indexed(q_list, column, 0)->output_alphabet);
-		for (j = 1; j < q_output_union->size; ++j) {
-			alphabet_union(next_output_union, get_cond_quantizer_indexed(q_list, column, 2*j)->output_alphabet, next_output_union);
-		}
 //		printf("Output alphabet union:\n");
 //		print_alphabet(next_output_union);
 
