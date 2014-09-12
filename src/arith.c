@@ -10,16 +10,6 @@
 #include "os_stream.c"
 #include "stats.c"
 
-typedef struct Arithmetic_code_t{
-    
-    uint32_t scale3;
-    uint32_t m;
-    uint32_t l;
-    uint32_t u;
-    uint32_t t;
-}*Arithmetic_code;
-
-
 Arithmetic_code initialize_arithmetic_encoder(uint32_t m){
     
     Arithmetic_code a_code;
