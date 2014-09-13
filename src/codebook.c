@@ -126,7 +126,7 @@ struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint3
 }
 
 /**
- * Stores the given quantizer at the appropriate index corresponding to the left context symbol given
+ * Stores the given quantizers at the appropriate index corresponding to the left context symbol given
  * for the specific column
  */
 void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
@@ -134,6 +134,10 @@ void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *
 	store_cond_quantizers_indexed(lo, hi, ratio, list, column, idx);
 }
 
+/**
+ * Stores the given quantizers directly at the given index based on the previous context symbol. Faster when
+ * we know what the previous index was in addition to what the previous symbol was
+ */
 void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, uint32_t idx) {
     list->q[column][2*idx] = lo;
 	list->q[column][2*idx + 1] = hi;
@@ -142,6 +146,7 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
 
 /**
  * Selects a quantizer for the given column from the quantizer list with the appropriate ratio
+ * @todo quantize ratios based on how they're stored as ASCII
  */
 struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
@@ -196,6 +201,7 @@ void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *p
  * @param high Output, number of hi states stored here
  * @param low Output, number of lo states stored here
  * @param ratio Output, ratio between hi and lo to use
+ * @deprecated as we now optimally match states to entropy
  */
 void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
 	double h_hi, h_lo;
@@ -229,7 +235,7 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 	struct pmf_t *pmf_temp = alloc_pmf(pmf->alphabet);
 	uint32_t states = 1;
 	
-	q_temp = generate_quantizer(pmf, dist, states, NULL);
+	q_temp = generate_quantizer(pmf, dist, states);
 	hi_entropy = get_entropy(apply_quantizer(q_temp, pmf, pmf_temp));
 	*hi = q_temp;
 	*lo = alloc_quantizer(pmf->alphabet);
@@ -240,12 +246,13 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 		lo_entropy = hi_entropy;
 		
 		states += 1;
-		q_temp = generate_quantizer(pmf, dist, states, NULL);
+		q_temp = generate_quantizer(pmf, dist, states);
 		hi_entropy = get_entropy(apply_quantizer(q_temp, pmf, pmf_temp));
 		*hi = q_temp;
 	} while (hi_entropy < target && states < pmf->alphabet->size);
 
 	printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
+	printf("Expected distortion: Low: %f, High: %f.\n", (*lo)->mse, (*hi)->mse);
 
 	// Assign ratio based on how we did against our entropy target
 	if (hi_entropy < target)
@@ -259,10 +266,8 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 /**
  * ???
  */
-void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio, struct alphabet_t *q_output_union){
-    
+void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio, struct alphabet_t *q_output_union) {
     symbol_t x;
-    
     uint32_t q_symbol, idx;
     
     for (x = 0; x < q_lo->alphabet->size; x++) {
@@ -283,14 +288,10 @@ void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, 
     
 }
 
-void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_pmfs, uint32_t column, struct pmf_list_t *prev_qpmf_list, struct alphabet_t * q_alphabet_union, struct alphabet_t * prev_q_alphabet_union, struct cond_quantizer_list_t *q_list){
-    
+void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_pmfs, uint32_t column, struct pmf_list_t *prev_qpmf_list, struct alphabet_t * q_alphabet_union, struct alphabet_t * prev_q_alphabet_union, struct cond_quantizer_list_t *q_list) {
     symbol_t x;
-    
     double p_q_xq = 0.0, p_temp = 0.0;
-    
     uint32_t q_symbol, idx, k, j, q_prev_symbol;
-    
     struct quantizer_t *q_hi, *q_lo;
     
     // compute P(Q_i | X_i)
@@ -338,9 +339,7 @@ void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
 }
 
 void compute_xpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_pmfs, uint32_t column, struct pmf_list_t *xpmf_list, struct alphabet_t * q_alphabet_union){
-    
     symbol_t x;
-    
     uint32_t q_symbol, idx, k;
     
     // compute P(X_{i+1} | Q_i)
@@ -414,14 +413,20 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
     xpmf_list = alloc_pmf_list(q_output_union->size, A);
     
     // Compute number of states for hi and lo, and ratio for the quantizers
-    find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)) * comp, &hi, &lo, &ratio);
-	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &mse);
+/*
+	find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0)) * comp, &hi, &lo, &ratio);
+	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo);
 	q_lo->ratio = ratio;
-	total_mse = ratio*mse;
-    q_hi = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, hi, &mse);
+	total_mse = ratio*q_lo->mse;
+    q_hi = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, hi);
 	q_hi->ratio = 1-ratio;
-	total_mse += (1-ratio)*mse;
+	total_mse += (1-ratio)*q_hi->mse;
+*/
 	
+	ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*comp, &q_lo, &q_hi);
+	q_lo->ratio = ratio;
+	q_hi->ratio = 1-ratio;
+	total_mse = ratio*q_lo->mse + (1-ratio)*q_hi->mse;
     store_cond_quantizers(q_lo, q_hi, ratio, q_list, 0, 0);
     
     // free the used pmfs and alphabet
@@ -477,6 +482,8 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 			ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*comp, &q_lo, &q_hi);
 			q_lo->ratio = ratio;
 			q_hi->ratio = 1-ratio;
+			// This actually needs to be scaled by the probability of this quantizer pair being used to be accurate, uniform assumption is an approximation
+			total_mse += (ratio*q_lo->mse + (1-ratio)*q_hi->mse) / q_output_union->size;
             store_cond_quantizers_indexed(q_lo, q_hi, ratio, q_list, column, j);
 			
         }
@@ -497,7 +504,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
     free(q_output_union);
     
 	if (expected_distortion)
-		*expected_distortion = total_mse;
+		*expected_distortion = total_mse / in_pmfs->columns;
 
 	return q_list;
 }
@@ -505,7 +512,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 /**
  * Given the statistics calculated before, we need to compute the entire codebook's worth of
  * quantizers, as well as all of the PMFs and related stats
- * TODO: Add hi states to generation
+ * @deprecated definitely has a bug in handling widely varying alphabet sizes
  */
 struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
 	// Miscellaneous variables

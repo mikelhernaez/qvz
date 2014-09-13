@@ -25,12 +25,8 @@ void free_quantizer(struct quantizer_t *q) {
  * Produce a quantizer with the given number of states for the given pmf, and
  * optionally computes the expected distortion produced by this quantizer.
  * The bounds array here contains the left endpoint (inclusive) of each region
- * TODO: Remove reconstruction variable, store directly in output alphabet
  */
- 
- // MIKEL: I see now the point of the second case of how to compute the number of states, as one might want 2^S states so that no bit is wasted.
- // MIKEL: However, if we use arithmetic encoding over the binary alphabet, it will take care of the bit "inequality".
-struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states, double *restrict dist_out) {
+struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distortion_t *restrict dist, uint32_t states) {
 	struct quantizer_t *q = alloc_quantizer(pmf->alphabet);
 	uint32_t changed = 1;
 	uint32_t iter = 0;
@@ -120,16 +116,12 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 		q->output_alphabet->symbols[j] = reconstruction[j];
 	}
 
-	// If requested, calculate the expected distortion for the final assignment
-	// and return it to the caller
-	if (dist_out != NULL) {
-		mse = 0.0;
-		for (j = 0; j < states; ++j) {
-			for (i = bounds[j]; i < bounds[j+1]; ++i) {
-				mse += get_distortion(dist, i, reconstruction[j]) * get_probability(pmf, i);
-			}
+	// Calculate the distortion and store it in the quantizer
+	q->mse = 0.0;
+	for (j = 0; j < states; ++j) {
+		for (i = bounds[j]; i < bounds[j+1]; ++i) {
+			q->mse += get_distortion(dist, i, reconstruction[j]) * get_probability(pmf, i);
 		}
-		*dist_out = mse;
 	}
     
 	return q;
