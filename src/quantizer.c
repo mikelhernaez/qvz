@@ -112,9 +112,7 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 
 	// Save the output alphabet in the quantizer
 	q->output_alphabet = alloc_alphabet(states);
-	for (j = 0; j < states; ++j) {
-		q->output_alphabet->symbols[j] = reconstruction[j];
-	}
+	memcpy(q->output_alphabet->symbols, reconstruction, sizeof(symbol_t) * states);
 
 	// Calculate the distortion and store it in the quantizer
 	q->mse = 0.0;

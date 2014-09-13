@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <assert.h>
 
+#if defined(LINUX) || defined(__APPLE__)
+	#include <arpa/inet.h>
+#endif
+
 /**
  * To compute stats for the training data, we will need a set of conditional PMFs, one
  * per column
@@ -55,6 +59,7 @@ struct cond_quantizer_list_t *alloc_conditional_quantizer_list(uint32_t columns)
 	rtn->input_alphabets = (struct alphabet_t **) calloc(columns, sizeof(struct alphabet_t *));
 	rtn->q = (struct quantizer_t ***) calloc(columns, sizeof(struct quantizer_t **));
     rtn->ratio = (double **) calloc(columns, sizeof(double *));
+	rtn->qratio = (uint8_t **) calloc(columns, sizeof(uint8_t *));
 	return rtn;
 }
 
@@ -74,9 +79,11 @@ void free_cond_quantizer_list(struct cond_quantizer_list_t *list) {
 			free_alphabet(list->input_alphabets[i]);
 			free(list->q[i]);
 			free(list->ratio[i]);
+			free(list->qratio[i]);
 		}
 	}
 
+	free(list->qratio);
 	free(list->ratio);
 	free(list->q);
 	free(list->input_alphabets);
@@ -97,6 +104,7 @@ void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t col
 	list->q[column] = (struct quantizer_t **) calloc(input_union->size*2, sizeof(struct quantizer_t *));
 	// One ratio per element of input union
 	list->ratio[column] = (double *) calloc(input_union->size, sizeof(double));
+	list->qratio[column] = (uint8_t *) calloc(input_union->size, sizeof(uint8_t));
 }
 
 /**
@@ -142,6 +150,7 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
     list->q[column][2*idx] = lo;
 	list->q[column][2*idx + 1] = hi;
     list->ratio[column][idx] = ratio;
+	list->qratio[column][idx] = (uint8_t) (ratio * 100);
 }
 
 /**
@@ -370,13 +379,12 @@ void compute_xpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
  */
 struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, double *expected_distortion) {
 	// Stuff for state allocation and mixing
-	uint32_t hi, lo;
 	double ratio;
     
 	// Miscellaneous variables
 	uint32_t column, j;
 	symbol_t q_symbol;
-	double mse, total_mse;
+	double total_mse;
     
 	// Output list of conditional quantizers
 	struct cond_quantizer_list_t *q_list = alloc_conditional_quantizer_list(info->columns);
@@ -565,7 +573,7 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 //	store_cond_quantizers(q_lo, q_lo, ratio, q_list, 0, 0);
 
 	find_states(get_entropy(get_cond_pmf(in_pmfs, 0, 0))*comp, &hi, &lo, &ratio);
-	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo, &total_mse);
+	q_lo = generate_quantizer(get_cond_pmf(in_pmfs, 0, 0), dist, lo);
 	q_lo->ratio = ratio;
 	store_cond_quantizers(q_lo, q_lo, ratio, q_list, 0, 0);
 
@@ -629,7 +637,7 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 
 			// Find and save quantizer
 			find_states(get_entropy(xpmf_list->pmfs[q])*comp, &hi, &lo, &ratio);
-			q_lo = generate_quantizer(xpmf_list->pmfs[q], dist, lo, &mse);
+			q_lo = generate_quantizer(xpmf_list->pmfs[q], dist, lo);
 			q_lo->ratio = ratio;
 			store_cond_quantizers(q_lo, q_lo, ratio, q_list, column, q);
 
@@ -711,18 +719,26 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 // using the new C-based calculations
 
 /**
- * Writes a codebook to a file in the same format that we read it below, from the quantizer list
+ * Writes a codebook to a file that will be used by the decoder to initialize the arithmetic decoder
+ * identically to how it was set up during encoding. The format for the file is:
+ * Line 1: Four bytes in network order indicating number of columns per read
+ * Line 2: 1 byte ratio offset by 33 to be human readable
+ * Line 3: 1 byte per quantizer symbol for column 0, low
+ * Line 4: 1 byte per quantizer symbol for column 0, high
+ * Lines (2+3j, 3+3j, 4+3j):
+ *  1: 1 byte per ratio per unique output of previous column
+ *  2: 1 byte per quantizer symbol for each low quantizer in order of symbols in previous column
+ *  3: 1 byte per quantizer symbol for each high quantizer in order of symbols in previous column
  */
 void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers) {
 	FILE *fp;
-	uint32_t i, j, k, z;
+	uint32_t i, j, k;
 	uint32_t columns = quantizers->columns;
 	struct quantizer_t *q_temp = get_cond_quantizer_indexed(quantizers, 0, 0);
 	uint32_t size = q_temp->alphabet->size;
 	uint32_t buflen = columns > size ? columns : size;
 	char *eol = "\n";
 	char *linebuf = (char *) _alloca(sizeof(char)*buflen);
-	char *empty = (char *) _alloca(sizeof(char)*buflen);
 
 	fp = fopen(filename, "wt");
 	if (!fp) {
@@ -730,50 +746,52 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 		exit(1);
 	}
 
-	// ASCII spaces are used to denote "unused" stuff
-	memset(empty, 32, sizeof(char)*buflen);
+	// First line, number of columns
+	columns = htonl(columns);
+	fwrite(&columns, sizeof(uint32_t), 1, fp);
+	fwrite(eol, sizeof(char), 1, fp);
+	columns = ntohl(columns);
 
-	// First two lines are not used (number of states per column) but need to have the same length
-	// as the number of columns
-	fwrite(empty, sizeof(char), columns, fp);
-	fwrite(eol, sizeof(char), 1, fp);
-	fwrite(empty, sizeof(char), columns, fp);
-	fwrite(eol, sizeof(char), 1, fp);
+	// Second line, ratio for zero context quantizer
+	linebuf[0] = quantizers->qratio[0][0];
+	linebuf[1] = eol[0];
+	fwrite(linebuf, sizeof(char), 2, fp);
 
-	// Next line is the ratio between states
-	for (i = 0; i < columns; ++i) {
-		linebuf[i] = ((uint8_t)(quantizers->ratio[i][0]*100)) + 33;
-	}
-	fwrite(linebuf, sizeof(char), columns, fp);
-	fwrite(eol, sizeof(char), 1, fp);
-	
-	// Now, as we only have low states we will write each quantizer twice to match the format
-
-	// Column 0 is handled specially
-	for (i = 0; i < size; ++i) {
-		linebuf[i] = q_temp->q[i] + 33;
-	}
-	fwrite(linebuf, sizeof(char), size, fp);
-	fwrite(eol, sizeof(char), 1, fp);
+	// Third line is low quantizer
+	COPY_Q_TO_LINE(linebuf, q_temp->q, i, size);
 	fwrite(linebuf, sizeof(char), size, fp);
 	fwrite(eol, sizeof(char), 1, fp);
 
+	// Fourth line is high quantizer
+	q_temp = get_cond_quantizer_indexed(quantizers, 0, 1);
+	COPY_Q_TO_LINE(linebuf, q_temp->q, i, size);
+	fwrite(linebuf, sizeof(char), size, fp);
+	fwrite(eol, sizeof(char), 1, fp);
+
+	// Now for the rest of the columns, use the same format
 	for (i = 1; i < columns; ++i) {
-		for (z = 0; z < 2; ++z) {
-			for (j = 0; j < size; ++j) {
-				q_temp = get_cond_quantizer(quantizers, i, j);
-				if (q_temp) {
-					for (k = 0; k < size; ++k) {
-						linebuf[k] = q_temp->q[k] + 33;
-					}
-					fwrite(linebuf, sizeof(char), size, fp);
-				}
-				else {
-					fwrite(empty, sizeof(char), size, fp);
-				}
-			}
-			fwrite(eol, sizeof(char), 1, fp);
+		// First a line containing ratios for each previous context
+		for (j = 0; j < quantizers->input_alphabets[i]->size; ++j) {
+			linebuf[0] = quantizers->qratio[i][j];
 		}
+		fwrite(linebuf, sizeof(char), quantizers->input_alphabets[i]->size, fp);
+		fwrite(eol, sizeof(char), 1, fp);
+
+		// Next, the low quantizers in index order
+		for (j = 0; j < quantizers->input_alphabets[i]->size; ++j) {
+			q_temp = get_cond_quantizer_indexed(quantizers, i, 2*j);
+			COPY_Q_TO_LINE(linebuf, q_temp->q, k, size);
+			fwrite(linebuf, sizeof(char), size, fp);
+		}
+		fwrite(eol, sizeof(char), 1, fp);
+
+		// Finally, the high quantizers in index order
+		for (j = 0; j < quantizers->input_alphabets[i]->size; ++j) {
+			q_temp = get_cond_quantizer_indexed(quantizers, i, 2*j+1);
+			COPY_Q_TO_LINE(linebuf, q_temp->q, k, size);
+			fwrite(linebuf, sizeof(char), size, fp);
+		}
+		fwrite(eol, sizeof(char), 1, fp);
 	}
 
 	fclose(fp);
@@ -913,21 +931,6 @@ struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column
 	}
 	return &list->low[column][prev_value];
 }
-
-/**
- * Converts the quality score into a state number that can be stored in fewer bits
- * @param value is an ascii character to be converted into a numbered state
- * @deprecated old codebooks, remove
-uint8_t find_state_encoding(struct codebook_t *codebook, uint8_t value) {
-	uint8_t u;
-
-	for (u = 0; u < codebook->actual_unique_count; ++u) {
-		if (codebook->uniques[u] == value)
-			return u;
-	}
-	return u;
-}
-*/
 
 /**
  * Displays a codebook on STDOUT

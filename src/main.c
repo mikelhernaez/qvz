@@ -78,6 +78,7 @@ int main(int argc, char **argv) {
 	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, &distortion);
 //	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0.5, 0, &distortion);
 	columns = qlist->columns;
+
 	stop_timer(&stats);
 	start_timer(&encoding);
 
@@ -103,6 +104,9 @@ int main(int argc, char **argv) {
 		perror("Unable to open output file");
 		exit(1);
 	}
+	
+	// Temporary: write codebook to separate file (soon it will be included in the compressed file)
+	write_codebook("new_codebook.txt", qlist);
 
 	// Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
 	srand((uint32_t) time(0));

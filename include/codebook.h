@@ -39,7 +39,8 @@ struct cond_quantizer_list_t {
 	uint32_t columns;
 	struct alphabet_t **input_alphabets;
 	struct quantizer_t ***q;
-	double **ratio;
+	double **ratio;				// Raw ratio
+	uint8_t **qratio;			// Quantized ratio
 	struct well_state_t well;
 };
 
@@ -89,6 +90,8 @@ struct codebook_list_t {
 	uint32_t columns;
 	struct well_state_t well;
 };
+
+#define COPY_Q_TO_LINE(line, q, i, size) for (i = 0; i < size; ++i) { line[i] = q[i] + 33; }
 
 // Master function to read a codebook from a file
 void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers);
