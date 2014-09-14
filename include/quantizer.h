@@ -31,6 +31,9 @@ struct quantizer_t *generate_quantizer(struct pmf_t *restrict pmf, struct distor
 // Calculate the output pmf when the quantizer is applied to the input pmf
 struct pmf_t *apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *restrict pmf, struct pmf_t *restrict output);
 
+// Find the output alphabet of a quantizer
+void find_output_alphabet(struct quantizer_t *);
+
 // Display/debugging
 void print_quantizer(struct quantizer_t *);
 

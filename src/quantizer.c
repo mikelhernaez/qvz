@@ -155,6 +155,34 @@ struct pmf_t *apply_quantizer(struct quantizer_t *restrict q, struct pmf_t *rest
 }
 
 /**
+ * Generates the output alphabet from the quantization table, in case this isn't
+ * already available
+ */
+void find_output_alphabet(struct quantizer_t *q) {
+	symbol_t p;
+	uint32_t x;
+	uint32_t size;
+	symbol_t *uniques = _alloca(q->alphabet->size * sizeof(symbol_t));
+
+	// First symbol in quantizer output is always unique
+	p = q->q[0];
+	uniques[0] = p;
+	size = 1;
+
+	// Search the rest of the quantizer
+	for (x = 1; x < q->alphabet->size; ++x) {
+		if (q->q[x] != p) {
+			uniques[size] = q->q[x];
+			size += 1;
+		}
+	}
+
+	// Make it into a proper alphabet
+	q->output_alphabet = alloc_alphabet(size);
+	memcpy(q->output_alphabet->symbols, uniques, size*sizeof(symbol_t));
+}
+
+/**
  * Print a quantizer to stdout
  */
 void print_quantizer(struct quantizer_t *q) {
