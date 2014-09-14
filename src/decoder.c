@@ -1,33 +1,30 @@
 
-#define _CRT_SECURE_NO_WARNINGS
+#include "util.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 #include "codebook.h"
-#include "util.h"
-
-#define SYMBOLS 41
 
 /**
- * Decodes the files given
+ * Decodes the file given to produce a quality value file
  */
 int main(int argc, char **argv) {
 	FILE *fin, *fout;
 	uint32_t columns;
-	struct codebook_list_t cb_list;
-	struct codebook_t *prev_cb;
 	uint8_t *data, *line;
 	uint8_t done = 0, next_done = 0;
 	uint32_t u, k, s, j;
 	uint32_t threshold = 2048;
+	uint32_t bits;
 	uint8_t mask;
 	struct hrtimer_t timer;
+	struct cond_quantizer_list_t *qlist;
+	struct quantizer_t *q;
+	struct alphabet_t *A = alloc_alphabet(41);
 
 	// Check arguments
 	if (argc != 4) {
@@ -39,7 +36,8 @@ int main(int argc, char **argv) {
 	start_timer(&timer);
 
 	// Read in the codebook and find out how many columns we have
-	columns = read_codebook(argv[1], &cb_list, SYMBOLS);
+	qlist = read_codebook(argv[1], A);
+	columns = qlist->columns;
 
 	// Allocate space for decoding buffers
 	data = (uint8_t *) calloc(4096, sizeof(uint8_t));
@@ -59,7 +57,7 @@ int main(int argc, char **argv) {
 	}
 
 	// First, read in the WELL state and set up the PRNG
-	fread(cb_list.well.state, sizeof(uint32_t), 32, fin);
+	fread(qlist->well.state, sizeof(uint32_t), 32, fin);
 
 	// Now, read bytes from the file and do the decoding
 	fread(data, sizeof(uint8_t), 4096, fin);
@@ -71,39 +69,51 @@ int main(int argc, char **argv) {
 		// and a new spillover chunk is read in from the file
 
 		// Handle the first column in a line specially
-		prev_cb = choose_codebook(&cb_list, 0, 0);
-		mask = (1 << prev_cb->bits) - 1;
-		line[0] = prev_cb->uniques[data[u] & mask];
-		k = prev_cb->bits;
+//		prev_cb = choose_codebook(&cb_list, 0, 0);
+//		mask = (1 << prev_cb->bits) - 1;
+//		line[0] = prev_cb->uniques[data[u] & mask];
+//		k = prev_cb->bits;
+		q = choose_quantizer(qlist, 0, 0);
+		bits = cb_log2(q->output_alphabet->size);
+		mask = (1 << bits) - 1;
+//		printf("unpacked: %d", data[u] & mask);
+		line[0] = q->output_alphabet->symbols[data[u] & mask] + 33;
+//		printf("; decoded as %c\n", line[0]);
+		k = bits;
 
 		// If this symbol was a whole byte, advance a byte in our data stream
-		if (prev_cb->bits == 8) {
+		if (bits == 8) {
 			u += 1;
 			k = 0;
 		}
 
 		// Now iterate over the rest of the columns and decode based on history
 		for (s = 1; s < columns; ++s) {
-			//if (s == 64)
-			//	printf(".");
+//			if (s == 2)
+//				printf(".");
 
-			prev_cb = choose_codebook(&cb_list, s, line[s-1]-33);
-		
+//			prev_cb = choose_codebook(&cb_list, s, line[s-1]-33);
+			q = choose_quantizer(qlist, s, line[s-1]-33);
+			bits = cb_log2(q->output_alphabet->size);
+
 			// Unpack bits from the current byte
-			mask = (1 << prev_cb->bits) - 1;
+			mask = (1 << bits) - 1;
 			line[s] = ((((int) data[u]) & 0xff) >> k) & mask;
-			k += prev_cb->bits;
+			k += bits;
 
 			// If there are stray bits we need from the next byte, grab those too
 			if (k > 8) {
 				u += 1;
 				mask = (1 << (k - 8)) - 1;
-				line[s] |= (data[u] & mask) << (8 - k + prev_cb->bits);
+				line[s] |= (data[u] & mask) << (8 - k + bits);
 				k -= 8;
 			}
 
 			// Undo state encoding
-			line[s] = prev_cb->uniques[line[s]];
+//			line[s] = prev_cb->uniques[line[s]];
+//			printf("unpacked: %d", line[s]);
+			line[s] = q->output_alphabet->symbols[line[s]] + 33;
+//			printf("; decoded as: %c\n", line[s]);
 		}
 
 		// Write this line to the output file, note \n at the end of the line buffer to get the right length

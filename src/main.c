@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 	for (s = 0; s < 32; ++s) {
 		qlist->well.state[s] = rand();
 		// Testing with fixed state to look for consistency!
-		//cb_list.well.state[s] = 0x55555555;
+		//qlist->well.state[s] = 0x55555555;
 	}
 	
 	// Write the initial WELL state vector to the file first (fixed size of 32 bytes)

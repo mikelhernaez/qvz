@@ -176,7 +176,8 @@ void find_output_alphabet(struct quantizer_t *q) {
 	// Search the rest of the quantizer
 	for (x = 1; x < q->alphabet->size; ++x) {
 		if (q->q[x] != p) {
-			uniques[size] = q->q[x];
+			p = q->q[x];
+			uniques[size] =p;
 			size += 1;
 		}
 	}

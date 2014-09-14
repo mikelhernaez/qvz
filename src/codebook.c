@@ -155,12 +155,11 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
 
 /**
  * Selects a quantizer for the given column from the quantizer list with the appropriate ratio
- * @todo quantize ratios based on how they're stored as ASCII
  */
 struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev) {
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
 	assert(idx != ALPHABET_SYMBOL_NOT_FOUND);
-	if (well_1024a(&list->well) / ((double)UINT32_MAX) >= list->ratio[column][idx]) {
+	if (well_1024a(&list->well) % 100 >= list->qratio[column][idx]) {
 		return list->q[column][2*idx+1];
 	}
 	return list->q[column][2*idx];
@@ -772,7 +771,7 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 	for (i = 1; i < columns; ++i) {
 		// First a line containing ratios for each previous context
 		for (j = 0; j < quantizers->input_alphabets[i]->size; ++j) {
-			linebuf[0] = quantizers->qratio[i][j] + 33;
+			linebuf[j] = quantizers->qratio[i][j] + 33;
 		}
 		fwrite(linebuf, sizeof(char), quantizers->input_alphabets[i]->size, fp);
 		fwrite(eol, sizeof(char), 1, fp);
@@ -822,6 +821,9 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
 	columns = ntohl(*((uint32_t *)line));
 	qlist = alloc_conditional_quantizer_list(columns);
+	uniques = alloc_alphabet(1);
+	cond_quantizer_init_column(qlist, 0, uniques);
+	free_alphabet(uniques);
 
 	// Next line is qratio for zero quantizer offset by 33
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
