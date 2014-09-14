@@ -59,7 +59,6 @@ struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *lis
 struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
-void store_single_quantizer_indexed(struct quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
 struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 
@@ -67,47 +66,14 @@ uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
 double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi);
 struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, double *expected_distortion);
-struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion);
-
-// Legacy stuff to be converted still
-
-#define MAX_CODEBOOK_LINE_LENGTH 4096
-
-struct codebook_t {
-	uint8_t *quantizer;				// Array of quantizer mapping (index is input)
-	uint8_t *uniques;				// Array of unique values in quantizer list
-	uint8_t max_unique_count;		// Maximum number of uniques allowed. Unused?
-	uint8_t actual_unique_count;	// Actual number of unique elements
-	uint8_t bits;					// Number of bits used for state encoding this codebook
-	uint8_t symbols;				// Possible number of symbols in alphabet (length of quantizer)
-};
-
-struct codebook_list_t {
-	struct codebook_t **high;
-	struct codebook_t **low;
-	uint8_t *ratio;
-	uint32_t *select_count;
-	uint8_t symbols;
-	uint32_t columns;
-	struct well_state_t well;
-};
-
-#define COPY_Q_TO_LINE(line, q, i, size) for (i = 0; i < size; ++i) { line[i] = q[i] + 33; }
-#define COPY_Q_FROM_LINE(line, q, i, size) for (i = 0; i < size; ++i) { q[i] = line[i] - 33; }
+//struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion);
 
 // Master function to read a codebook from a file
 void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers);
 struct cond_quantizer_list_t *read_codebook(const char *filename, const struct alphabet_t *A);
 
-// Initialization and parsing
-void init_codebook_list(struct codebook_list_t *list, uint8_t symbols, uint32_t columns);
-void init_codebook_array(struct codebook_t **cb, uint8_t symbols, uint32_t columns);
-void generate_uniques(struct codebook_t *cb);
-
-// Operational functions
-struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column, uint8_t prev_value);
-
-// Debugging
-void print_codebook(struct codebook_t *cb);
+#define MAX_CODEBOOK_LINE_LENGTH 4096
+#define COPY_Q_TO_LINE(line, q, i, size) for (i = 0; i < size; ++i) { line[i] = q[i] + 33; }
+#define COPY_Q_FROM_LINE(line, q, i, size) for (i = 0; i < size; ++i) { q[i] = line[i] - 33; }
 
 #endif

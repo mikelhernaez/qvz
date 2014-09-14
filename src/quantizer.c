@@ -166,7 +166,7 @@ void find_output_alphabet(struct quantizer_t *q) {
 	symbol_t p;
 	uint32_t x;
 	uint32_t size;
-	symbol_t *uniques = _alloca(q->alphabet->size * sizeof(symbol_t));
+	symbol_t *uniques = (symbol_t *) _alloca(q->alphabet->size * sizeof(symbol_t));
 
 	// First symbol in quantizer output is always unique
 	p = q->q[0];
@@ -177,7 +177,7 @@ void find_output_alphabet(struct quantizer_t *q) {
 	for (x = 1; x < q->alphabet->size; ++x) {
 		if (q->q[x] != p) {
 			p = q->q[x];
-			uniques[size] =p;
+			uniques[size] = p;
 			size += 1;
 		}
 	}

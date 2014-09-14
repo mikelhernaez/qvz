@@ -69,16 +69,10 @@ int main(int argc, char **argv) {
 		// and a new spillover chunk is read in from the file
 
 		// Handle the first column in a line specially
-//		prev_cb = choose_codebook(&cb_list, 0, 0);
-//		mask = (1 << prev_cb->bits) - 1;
-//		line[0] = prev_cb->uniques[data[u] & mask];
-//		k = prev_cb->bits;
 		q = choose_quantizer(qlist, 0, 0);
 		bits = cb_log2(q->output_alphabet->size);
 		mask = (1 << bits) - 1;
-//		printf("unpacked: %d", data[u] & mask);
 		line[0] = q->output_alphabet->symbols[data[u] & mask] + 33;
-//		printf("; decoded as %c\n", line[0]);
 		k = bits;
 
 		// If this symbol was a whole byte, advance a byte in our data stream
@@ -92,7 +86,6 @@ int main(int argc, char **argv) {
 //			if (s == 2)
 //				printf(".");
 
-//			prev_cb = choose_codebook(&cb_list, s, line[s-1]-33);
 			q = choose_quantizer(qlist, s, line[s-1]-33);
 			bits = cb_log2(q->output_alphabet->size);
 
@@ -110,10 +103,7 @@ int main(int argc, char **argv) {
 			}
 
 			// Undo state encoding
-//			line[s] = prev_cb->uniques[line[s]];
-//			printf("unpacked: %d", line[s]);
 			line[s] = q->output_alphabet->symbols[line[s]] + 33;
-//			printf("; decoded as: %c\n", line[s]);
 		}
 
 		// Write this line to the output file, note \n at the end of the line buffer to get the right length
@@ -151,6 +141,10 @@ int main(int argc, char **argv) {
 
 	stop_timer(&timer);
 	printf("Decoded %d lines in %f seconds.\n", j, get_timer_interval(&timer));
+
+#ifndef LINUX
+	system("pause");
+#endif
 
 	return 0;
 }

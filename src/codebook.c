@@ -100,8 +100,10 @@ void free_cond_quantizer_list(struct cond_quantizer_list_t *list) {
  */
 void cond_quantizer_init_column(struct cond_quantizer_list_t *list, uint32_t column, const struct alphabet_t *input_union) {
 	list->input_alphabets[column] = duplicate_alphabet(input_union);
+
 	// Low and high quantizer per element of the input union
 	list->q[column] = (struct quantizer_t **) calloc(input_union->size*2, sizeof(struct quantizer_t *));
+
 	// One ratio per element of input union
 	list->ratio[column] = (double *) calloc(input_union->size, sizeof(double));
 	list->qratio[column] = (uint8_t *) calloc(input_union->size, sizeof(uint8_t));
@@ -210,7 +212,6 @@ void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *p
  * @param low Output, number of lo states stored here
  * @param ratio Output, ratio between hi and lo to use
  * @deprecated as we now optimally match states to entropy
- */
 void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
 	double h_hi, h_lo;
 
@@ -227,6 +228,7 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
 	else
 		*ratio = (entropy - h_hi) / (h_lo - h_hi);
 }
+*/
 
 /**
  * Searches (linearly) for the pair of quantizers that surround the target entropy by guessing and checking the number of states
@@ -235,7 +237,6 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
  * @param lo Place to store the pointer to the low quantizer
  * @param hi Place to store the pointer to the high quantizer
  * @return double The ratio necessary to combine these two quantizers to achieve the target
- * @todo Add expected distortion calculations
  */
 double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi) {
 	struct quantizer_t *q_temp;
@@ -520,7 +521,6 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
  * Given the statistics calculated before, we need to compute the entire codebook's worth of
  * quantizers, as well as all of the PMFs and related stats
  * @deprecated definitely has a bug in handling widely varying alphabet sizes
- */
 struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, uint32_t mode, double *expected_distortion) {
 	// Miscellaneous variables
 	uint32_t column, i, j, k;
@@ -713,9 +713,7 @@ struct cond_quantizer_list_t *generate_codebooks_greg(struct quality_file_t *inf
 
 	return q_list;
 }
-
-// Legacy stuff for the current version; this should be updated as things are implemented
-// using the new C-based calculations
+*/
 
 /**
  * Writes a codebook to a file that will be used by the decoder to initialize the arithmetic decoder
@@ -892,96 +890,3 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 
 	return qlist;
 }
-
-/**
- * Initializes a codebook list with storage space for an adequate number of codebooks
- * all initialized to all zeros, for the given number of possible symbols
- */
-void init_codebook_list(struct codebook_list_t *list, uint8_t symbols, uint32_t columns) {
-	
-	// First, allocate arrays based on number of columns within the codebook list
-	list->high = (struct codebook_t **) calloc(columns, sizeof(struct codebook_t *));
-	list->low = (struct codebook_t **) calloc(columns, sizeof(struct codebook_t *));
-	list->ratio = (uint8_t *) calloc(columns, sizeof(uint8_t));
-	list->select_count = (uint32_t *) calloc(columns, sizeof(uint32_t));
-	list->symbols = symbols;
-	list->columns = columns;
-
-	// Now allocate for each array
-	init_codebook_array(list->high, symbols, columns);
-	init_codebook_array(list->low, symbols, columns);
-
-	// Make sure that WELL starts off reasonable
-	list->well.n = 0;
-}
-
-/**
- * Initializes an array of codebooks, used when initializing a codebook list
- */
-void init_codebook_array(struct codebook_t **cb, uint8_t symbols, uint32_t columns) {
-	uint32_t c, s;
-
-	// First column is special in that it only has one codebook, because there is no left context
-	cb[0] = (struct codebook_t *) calloc(1, sizeof(struct codebook_t));
-	cb[0]->quantizer = (uint8_t *) calloc(symbols, sizeof(uint8_t));
-	cb[0]->uniques = (uint8_t *) calloc(symbols, sizeof(uint8_t));
-	cb[0]->symbols = symbols;
-
-	for (c = 1; c < columns; ++c) {
-		cb[c] = (struct codebook_t *) calloc(symbols, sizeof(struct codebook_t));
-		for (s = 0; s < symbols; ++s) {
-			cb[c][s].symbols = symbols;
-			cb[c][s].quantizer = (uint8_t *) calloc(symbols, sizeof(uint8_t));
-			cb[c][s].uniques = (uint8_t *) calloc(symbols, sizeof(uint8_t));
-		}
-	}
-}
-
-/**
- * Walks over the quantizer string to determine how many unique symbols are present
- */
-void generate_uniques(struct codebook_t *cb) {
-	uint8_t u = 0;
-	uint8_t s;
-
-	cb->uniques[0] = cb->quantizer[0];
-	for (s = 1; s < cb->symbols; ++s) {
-		if (cb->quantizer[s] != cb->uniques[u]) {
-			u += 1;
-			cb->uniques[u] = cb->quantizer[s];
-		}
-	}
-
-	cb->actual_unique_count = u+1;
-	cb->bits = cb_log2(cb->actual_unique_count);
-}
-
-/**
- * Selects a codebook for the given column from the codebook list with the appropriate ratio
- */
-struct codebook_t *choose_codebook(struct codebook_list_t *list, uint32_t column, uint8_t prev_value) {
-	if (well_1024a(&list->well) % 100 >= list->ratio[column]) {
-		list->select_count[column] += 1;
-		return &list->high[column][prev_value];
-	}
-	return &list->low[column][prev_value];
-}
-
-/**
- * Displays a codebook on STDOUT
- * @deprecated, remove as the quantizer print methods handle this now
- */
-void print_codebook(struct codebook_t *cb) {
-	uint8_t s = 0;
-	uint8_t *tmp;
-
-	tmp = (uint8_t *) calloc(cb->symbols+1, sizeof(uint8_t));
-
-	for (s = 0; s < cb->symbols; ++s) {
-		memcpy(tmp, cb[s].quantizer, cb->symbols);
-		printf("%d (%c):\t%s\n", s, (uint8_t) (s+33), tmp);
-	}
-
-	free(tmp);
-}
-
