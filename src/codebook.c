@@ -753,7 +753,7 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 	columns = ntohl(columns);
 
 	// Second line, ratio for zero context quantizer
-	linebuf[0] = quantizers->qratio[0][0];
+	linebuf[0] = quantizers->qratio[0][0] + 33;
 	linebuf[1] = eol[0];
 	fwrite(linebuf, sizeof(char), 2, fp);
 
@@ -772,7 +772,7 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 	for (i = 1; i < columns; ++i) {
 		// First a line containing ratios for each previous context
 		for (j = 0; j < quantizers->input_alphabets[i]->size; ++j) {
-			linebuf[0] = quantizers->qratio[i][j];
+			linebuf[0] = quantizers->qratio[i][j] + 33;
 		}
 		fwrite(linebuf, sizeof(char), quantizers->input_alphabets[i]->size, fp);
 		fwrite(eol, sizeof(char), 1, fp);
@@ -801,10 +801,15 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
  * Reads in the codebook in the specified filename, calculates how many columns it is configured
  * for, and prepares the codebook list structure necessary to use for encoding with it
  */
-uint32_t read_codebook(const char *filename, struct codebook_list_t *cb_list, uint8_t symbols) {
+struct cond_quantizer_list_t *read_codebook(const char *filename, const struct alphabet_t *A) {
 	FILE *fp;
 	uint32_t columns;
-	uint32_t column, j;
+	uint32_t column, size;
+	uint32_t i, j;
+	struct quantizer_t *q_lo, *q_hi;
+	struct cond_quantizer_list_t *qlist;
+	struct alphabet_t *uniques;
+	double ratio;
 	char line[MAX_CODEBOOK_LINE_LENGTH];
 
 	fp = fopen(filename, "rt");
@@ -813,49 +818,77 @@ uint32_t read_codebook(const char *filename, struct codebook_list_t *cb_list, ui
 		exit(1);
 	}
 
-	// Figure out how many columns the data has, accounting for the newline at the end of the line
+	// First line stores the number of columns in network order as a 4 byte integer
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-	columns = strlen(line) - 1;
+	columns = ntohl(*((uint32_t *)line));
+	qlist = alloc_conditional_quantizer_list(columns);
 
-	// Initialize codebook based on knowing how many lines we have
-	init_codebook_list(cb_list, symbols, columns);
-
-	// Skip the first line (already read) and second line because we don't actually care about how many states there are
+	// Next line is qratio for zero quantizer offset by 33
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
+	ratio = (line[0]-33) / 100.0;
 
-	// Next line is the selection ratio between the two codebooks
+	// Allocate some quantizers and copy the tables from lines 3 and 4
+	q_lo = alloc_quantizer(A);
+	q_hi = alloc_quantizer(A);
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-	for (j = 0; j < columns; ++j) {
-		cb_list->ratio[j] = line[j] - 33;
-	}
-
-	// Now, the lines in file alternate definitions for each codebook (low then high), so copy them over and generate the corresponding unique lists
+	COPY_Q_FROM_LINE(line, q_lo->q, j, A->size);
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-	memcpy(cb_list->low[0][0].quantizer, line, symbols * sizeof(uint8_t));
-	generate_uniques(&cb_list->low[0][0]);
+	COPY_Q_FROM_LINE(line, q_hi->q, j, A->size);
 
-	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-	memcpy(cb_list->high[0][0].quantizer, line, symbols * sizeof(uint8_t));
-	generate_uniques(&cb_list->high[0][0]);
+	// Fill in missing uniques information and store
+	find_output_alphabet(q_lo);
+	find_output_alphabet(q_hi);
+	uniques = alloc_alphabet(0);
+	alphabet_union(q_lo->output_alphabet, q_hi->output_alphabet, uniques);
+	store_cond_quantizers_indexed(q_lo, q_hi, ratio, qlist, 0, 0);
 
-	// Parse remaining lines as code books conditional on previous column values
+	// Now handle the remaining columns uniformly
 	for (column = 1; column < columns; ++column) {
+		// Initialize the column information so we can write to it directly
+		cond_quantizer_init_column(qlist, column, uniques);
+		size = uniques->size;
+		free_alphabet(uniques);
+		uniques = alloc_alphabet(0);
+		
+		// First line is the ratios
 		fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-		for (j = 0; j < symbols; ++j) {
-			memcpy(cb_list->low[column][j].quantizer, &line[j*symbols], symbols * sizeof(uint8_t));
-			generate_uniques(&cb_list->low[column][j]);
+		for (i = 0; i < size; ++i) {
+			qlist->qratio[column][i] = line[i] - 33;
 		}
 
-		fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-		for (j = 0; j < symbols; ++j) {
-			memcpy(cb_list->high[column][j].quantizer, &line[j*symbols], symbols * sizeof(uint8_t));
-			generate_uniques(&cb_list->high[column][j]);
+		// Next line is a number of low quantizers
+		for (i = 0; i < size; ++i) {
+			q_lo = alloc_quantizer(A);
+			fread(line, A->size*sizeof(symbol_t), 1, fp);
+			COPY_Q_FROM_LINE(line, q_lo->q, j, A->size);
+			
+			find_output_alphabet(q_lo);
+			qlist->q[column][2*i] = q_lo;
+			alphabet_union(uniques, q_lo->output_alphabet, uniques);
 		}
+
+		// Kill the line with fgets to handle \n or \r\n automatically
+		(void) fgets(line, 2, fp);
+
+		// Next line is a number of high quantizers
+		for (i = 0; i < size; ++i) {
+			q_hi = alloc_quantizer(A);
+			fread(line, A->size*sizeof(symbol_t), 1, fp);
+			COPY_Q_FROM_LINE(line, q_hi->q, j, A->size);
+
+			find_output_alphabet(q_hi);
+			qlist->q[column][2*i+1] = q_hi;
+			alphabet_union(uniques, q_hi->output_alphabet, uniques);
+		}
+
+		// Kill the line with fgets again
+		(void) fgets(line, 2, fp);
 	}
 
-	// Done reading code book
-	fclose(fp);
-	return columns;
+	// We don't use the uniques from the last column
+	free_alphabet(uniques);
+
+	return qlist;
 }
 
 /**

@@ -14,9 +14,13 @@ struct quantizer_t *alloc_quantizer(const struct alphabet_t *alphabet) {
 }
 
 /**
- * Free the quantizer itself but not the alphabet
+ * Free the quantizer itself but not the input alphabet
+ * But do free the output alphabet
  */
 void free_quantizer(struct quantizer_t *q) {
+	if (q->output_alphabet)
+		free_alphabet(q->output_alphabet);
+
 	free(q->q);
 	free(q);
 }

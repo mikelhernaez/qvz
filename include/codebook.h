@@ -59,6 +59,7 @@ struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *lis
 struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
+void store_single_quantizer_indexed(struct quantizer_t *q, struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
 struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 
@@ -92,10 +93,11 @@ struct codebook_list_t {
 };
 
 #define COPY_Q_TO_LINE(line, q, i, size) for (i = 0; i < size; ++i) { line[i] = q[i] + 33; }
+#define COPY_Q_FROM_LINE(line, q, i, size) for (i = 0; i < size; ++i) { q[i] = line[i] - 33; }
 
 // Master function to read a codebook from a file
 void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers);
-uint32_t read_codebook(const char *filename, struct codebook_list_t *list, uint8_t symbols);
+struct cond_quantizer_list_t *read_codebook(const char *filename, const struct alphabet_t *A);
 
 // Initialization and parsing
 void init_codebook_list(struct codebook_list_t *list, uint8_t symbols, uint32_t columns);
