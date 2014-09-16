@@ -1,3 +1,4 @@
 *.txt2
 *.swp
 .DS_Store
+*.o
