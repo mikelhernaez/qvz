@@ -16,6 +16,7 @@
 	#include <time.h>
 	#define _stat stat
 	#define _alloca alloca
+	#define restrict __restrict__
 #elif __APPLE__
     #include <time.h>
     #define _stat stat
