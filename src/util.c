@@ -59,7 +59,7 @@ double get_timer_interval(struct hrtimer_t *timer) {
 		dsec -= 1;
 	}
 	
-	return ((double)dsec) + dnsec / 1.e-9;
+	return ((double)dsec) + dnsec * 1.e-9;
 #elif __APPLE__
     long dnsec = timer->stop.tv_nsec - timer->start.tv_nsec;
 	long dsec = timer->stop.tv_sec - timer->start.tv_sec;
@@ -69,7 +69,7 @@ double get_timer_interval(struct hrtimer_t *timer) {
 		dsec -= 1;
 	}
 	
-	return ((double)dsec) + dnsec / 1.e-9;
+	return ((double)dsec) + dnsec * 1.e-9;
 #else
 	return ((double)(timer->stop.QuadPart - timer->start.QuadPart))/timer->freq.QuadPart;
 #endif
