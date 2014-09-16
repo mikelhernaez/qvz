@@ -18,7 +18,7 @@ char *default_output = "c_bitpacked_quality_lossy.txt";
 /**
  * Actually does the encoding (and also tests decoding to ensure correctness)
  */
-int main_arith(int argc, char **argv) {
+int main(int argc, char **argv) {
 	FILE *fp, *fref;
 	uint32_t columns;
     
@@ -119,7 +119,7 @@ int main_arith(int argc, char **argv) {
 /**
  * Actually does the encoding (and also tests decoding to ensure correctness)
  */
-int main(int argc, char **argv) {
+int main_lzma(int argc, char **argv) {
 	FILE *fp, *fbitout, *fref;
 	uint32_t columns;
 
