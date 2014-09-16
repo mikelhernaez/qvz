@@ -8,11 +8,113 @@
 #include <time.h>
 
 #include "codebook.h"
+#include "qv_compressor.h"
 
 // Default file names if none are provided on the command line, for testing in Visual Studio
 // @todo remove from final version
-const char *default_input = "quality_lines.txt";
-const char *default_output = "c_bitpacked_quality_lossy.txt";
+char *default_input = "quality_lines.txt";
+char *default_output = "c_bitpacked_quality_lossy.txt";
+
+/**
+ * Actually does the encoding (and also tests decoding to ensure correctness)
+ */
+int main_arith(int argc, char **argv) {
+	FILE *fp, *fref;
+	uint32_t columns;
+    
+	// Old variables, might not all be needed as we improve the implementation
+	uint64_t bytes_used;
+	uint32_t num_lines = 0;
+	double distortion = 0.0;
+
+    
+	// New variables, definitely used
+	struct distortion_t *dist = generate_distortion_matrix(41, DISTORTION_MSE);
+	struct alphabet_t *alphabet = alloc_alphabet(41);
+	struct quality_file_t training_file;
+	struct cond_pmf_list_t *training_stats;
+	struct cond_quantizer_list_t *qlist;
+	uint32_t status;
+	struct hrtimer_t stats, encoding, total;
+	char *input_name, *output_name;
+    
+	// Check for arguments and get file names
+	if (argc != 3) {
+		// Print usage guidelines
+		printf("Usage: %s [input file] [output file]\n", argv[0]);
+		
+		// Attempted to run from command line but not all arguments are present
+		if (argc > 1) {
+			printf("Incorrect number of arguments supplied!");
+			exit(1);
+		}
+		else {
+			printf("Using default input file: %s\nDefault output file: %s.\n", default_input, default_output);
+			input_name = default_input;
+			output_name = default_output;
+		}
+	}
+	else {
+		input_name = argv[1];
+		output_name = argv[2];
+	}
+    
+	start_timer(&total);
+	start_timer(&stats);
+    
+	// Load file statistics and find statistics for the training data
+	status = load_file(input_name, &training_file, 1000000);
+	if (status != LF_ERROR_NONE) {
+		printf("load_file returned error: %d\n", status);
+		return 1;
+	}
+    
+	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
+	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, &distortion);
+    //	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0.5, 0, &distortion);
+	columns = qlist->columns;
+    
+	stop_timer(&stats);
+	start_timer(&encoding);
+    
+	printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
+	printf("Expected distortion: %f\n", distortion);
+    
+	// Now, open the input file and the output file
+	fp = fopen(input_name, "rt");
+	fref = fopen("ref.txt", "wt");
+	if (!fp) {
+		perror("Unable to open input file");
+		exit(1);
+	}
+	
+	// Temporary: write codebook to separate file (soon it will be included in the compressed file)
+	write_codebook("new_codebook.txt", qlist);
+    
+    bytes_used = start_qv_compression(fp, output_name, qlist, &num_lines, &distortion);
+    
+	fclose(fp);
+    
+	
+	stop_timer(&encoding);
+	stop_timer(&total);
+    
+	// Compress with LZMA and obtain file information to calculate size and rate
+	printf("MSE: %f\n", distortion);
+    //	printf("Filesize: %ld bytes\n", finfo.st_size);
+	printf("Lines: %d\n", num_lines);
+	printf("Total bytes used: %llu\n", bytes_used);
+    //	printf("Rate: %f\n", finfo.st_size*8./(((double)j)*columns));
+	printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
+	printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
+    
+#ifndef LINUX
+	system("pause");
+#endif
+    
+	return 0;
+}
+
 
 /**
  * Actually does the encoding (and also tests decoding to ensure correctness)
@@ -42,6 +144,9 @@ int main(int argc, char **argv) {
 	struct hrtimer_t stats, encoding, total;
 	const char *input_name, *output_name;
 	struct quantizer_t *q;
+    
+    
+    uint32_t dummy_idx = 0;
 
 	// Check for arguments and get file names
 	if (argc != 3) {
@@ -118,7 +223,7 @@ int main(int argc, char **argv) {
 	
 	// Write the initial WELL state vector to the file first (fixed size of 32 bytes)
 	fwrite(qlist->well.state, sizeof(uint32_t), 32, fbitout);
-
+    
 	bits_used = 0;
 	j = 0;
 	distortion = 0.0;
@@ -131,7 +236,7 @@ int main(int argc, char **argv) {
 		// variable, so we'd have to stick to this type of loop organization
 
 		// Select first column's codebook with no left context
-		q = choose_quantizer(qlist, 0, 0);
+		q = choose_quantizer(qlist, 0, 0, &dummy_idx);
 
 		// Quantize and calculate error simultaneously
 		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
@@ -143,7 +248,7 @@ int main(int argc, char **argv) {
 
 		for (s = 1; s < columns; ++s) {
 			// Quantize and compute error for MSE
-			q = choose_quantizer(qlist, s, outline[s-1]);
+			q = choose_quantizer(qlist, s, outline[s-1], &dummy_idx);
 			outline[s] = q->q[line[s]-33];
 			precodeline[s] = outline[s]+33;
 			error += (line[s] - outline[s] - 33)*(line[s] - outline[s] - 33);

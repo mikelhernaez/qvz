@@ -1,6 +1,6 @@
 //
-//  fasta_stream.c
-//  iDoComp_v1
+//  qv_stream.c
+//  qvz
 //
 //  Created by Mikel Hernaez on 8/7/14.
 //  Copyright (c) 2014 Mikel Hernaez. All rights reserved.
@@ -8,99 +8,117 @@
 
 #include "qv_compressor.h"
 
-uint8_t** generate_char_transitions(chromosome chr, arithStream signs){
-    
-    uint8_t** BP_transitions;
-    
-    BASEPAIR refBP, targetBP;
-    
-    uint32_t i = 0, j = 0;
-    
-    BP_transitions = (uint8_t **)calloc(35, sizeof(uint8_t*));
-    
-    for (i = 0; i < 35; i++) {
-        BP_transitions[i] = (uint8_t *)calloc(35, sizeof(uint8_t));
-    }
-    
-    // Store the rest of the numbers related to the edit distance between each of the pair of strings
-    while (chr != NULL) {
-        
-        // Check instructions
-        for (i = 0; i < chr->numInst - 1; i++) {
-            
-            refBP = char2BP(chr->instructions[i].refChar);
-            targetBP = char2BP(chr->instructions[i].targetChar);
-            
-            BP_transitions[refBP][targetBP] = 1;
-        }
-        
-        // Check insertions
-        for (i = 0; i < chr->numInse; i++) {
-            
-            refBP = char2BP(chr->insertions[i].refChar);
-            targetBP = char2BP(chr->insertions[i].targetChar);
-            
-            BP_transitions[refBP][targetBP] = 1;
-        }
-        
-        // Check substitutions
-        for (i = 0; i < chr->numSubs; i++) {
-            
-            refBP = char2BP(chr->substitutions[i].refChar);
-            targetBP = char2BP(chr->substitutions[i].targetChar);
-            
-            BP_transitions[refBP][targetBP] = 1;
-        }
-        
-        chr = chr->next;
-    }
-    
-    for (i = 0; i < 35; i++) {
-        for (j = 0; j < 35; j++) {
-            compress_Signs(signs, BP_transitions[i][j]);
-        }
-    }
-    
-    return BP_transitions;
-}
 
-uint8_t** regenerate_char_transitions(arithStream signs){
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                                                                                      //
+//                            STATS UPDATE                                              //
+//                                                                                      //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+uint32_t update_stats(stream_stats stats, int32_t x, uint32_t m){
     
-    uint8_t** BP_transitions;
+    int32_t i = 0;
+    // Update the statistics
+    stats->counts[x]+= stats->step, stats->n+= stats->step;
     
-    uint32_t i = 0, j = 0;
-    
-    // Allocate memory
-    BP_transitions = (uint8_t **)calloc(35, sizeof(uint8_t*));
-    
-    for (i = 0; i < 35; i++) {
-        BP_transitions[i] = (uint8_t *)calloc(35, sizeof(uint8_t));
-    }
-    
-    // regenerate the transitions
-    for (i = 0; i < 35; i++) {
-        for (j = 0; j < 35; j++) {
-            BP_transitions[i][j] = decompress_Signs(signs);
+    // Rescale if necessary
+    if (stats->n >= (1 << (m - 3))){
+        
+        stats->n = 0;
+        for (i = 0; i < (int32_t) stats->alphabetCard; i++){
+            if (stats->counts[i]) {
+                stats->counts[i] >>= 1, stats->counts[i]++;
+                stats->n += stats->counts[i];
+            }
         }
     }
     
-    return BP_transitions;
+    return 1;
 }
 
 
-arithStream initialize_arithStream_Ints(char* osPath, uint8_t decompressor_flag){
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                                                                                      //
+//                                  INITIALIZATION                                      //
+//                                                                                      //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+stream_stats** initialize_stream_stats(struct cond_quantizer_list_t *q_list){
+    
+    stream_stats** s;
+    
+    s = (stream_stats**) calloc(q_list->columns, sizeof(stream_stats *));
+    
+    uint32_t i = 0, j = 0, k = 0;
+    
+    // Stats for all the different quantizers
+    for (i = 0; i < q_list->columns; i++) {
+        
+        // Initialize stats for all the quantizers in column i (low and hi)
+        s[i] = (stream_stats*) calloc(2*(q_list->input_alphabets[i]->size), sizeof(stream_stats));
+        
+        for (j = 0; j < 2*(q_list->input_alphabets[i]->size); j++){
+            
+            s[i][j] = (stream_stats) calloc(1, sizeof(struct stream_stats_t));
+            
+            // Allocate memory for the counts
+            s[i][j]->counts = (uint32_t*) calloc( (q_list->q[i][j]->output_alphabet->size) + 2, sizeof(uint32_t));
+            
+            // An extra for the cumcounts
+            s[i][j]->counts += 1;
+            
+            s[i][j]->n = 0;
+            
+            // Initialize the quantizer's stats uniformly
+            
+            for (k = 0; k < q_list->q[i][j]->output_alphabet->size; k++) {
+                s[i][j]->counts[k] = 1;
+                s[i][j]->n++;
+            }
+            
+            s[i][j]->alphabetCard = q_list->q[i][j]->output_alphabet->size;
+            
+            // STEP
+            s[i][j]->step = 8;
+            
+        }
+        
+        
+    }
+    
+    return s;
+    
+}
+
+
+arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, struct cond_quantizer_list_t *q_list){
     
     arithStream as;
     FILE *fos;
     
-    uint32_t osPathLength = (uint32_t)strlen(osPath);
+    uint32_t osPathLength = (uint32_t)strlen(osPath), i = 0;
     
-    strcat(osPath, "_ints.ido");
+    strcat(osPath, ".qvz");
     fos = (decompressor_flag)? fopen(osPath, "r"):fopen(osPath, "w");
     
+    // Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
+	srand((uint32_t) time(0));
+	for (i = 0; i < 32; ++i) {
+		q_list->well.state[i] = rand();
+		// Testing with fixed state to look for consistency!
+		//qlist->well.state[s] = 0x55555555;
+	}
+	
+	// Write the initial WELL state vector to the file first (fixed size of 32 bytes)
+	if(decompressor_flag == 0)fwrite(q_list->well.state, sizeof(uint32_t), 32, fos);
+    
     as = (arithStream) calloc(1, sizeof(struct arithStream_t));
-    as->stats = initialize_stream_stats_Ints();
-    as->a = initialize_arithmetic_encoder(m_INTS);
+    as->stats = initialize_stream_stats(q_list);
+    as->a = initialize_arithmetic_encoder(m_arith);
     as->os = initialize_osStream(1, fos, NULL, decompressor_flag);
     as->a->t = (decompressor_flag)? read_uint32_from_stream(as->a->m, as->os):0;
     
@@ -110,69 +128,13 @@ arithStream initialize_arithStream_Ints(char* osPath, uint8_t decompressor_flag)
     
 }
 
-arithStream initialize_arithStream_Signs(char* osPath, uint8_t decompressor_flag){
+qv_compressor initialize_qv_compressor(char osPath[], uint8_t streamDirection, struct cond_quantizer_list_t *q_list){
     
-    arithStream as;
-    FILE *fos;
+    qv_compressor s;
     
-    uint32_t osPathLength = (uint32_t)strlen(osPath);
+    s = calloc(1, sizeof(struct qv_compressor_t));
     
-    strcat(osPath, "_signs.ido");
-    fos = (decompressor_flag)? fopen(osPath, "r"):fopen(osPath, "w");
-    
-    as = (arithStream) calloc(1, sizeof(struct arithStream_t));
-    as->stats = initialize_stream_stats_Ints();
-    as->a = initialize_arithmetic_encoder(m_SIGNS);
-    as->os = initialize_osStream(1, fos, NULL, decompressor_flag);
-    as->a->t = (decompressor_flag)? read_uint32_from_stream(as->a->m, as->os):0;
-    
-    *(osPath + osPathLength) = 0;
-    
-    return as;
-    
-}
-
-arithStream initialize_arithStream_Chars(char* osPath, uint8_t decompressor_flag, uint8_t **BP_trans){
-    
-    arithStream as;
-    FILE *fos;
-    
-    uint32_t osPathLength = (uint32_t)strlen(osPath);
-    
-    strcat(osPath, "_char.ido");
-    fos = (decompressor_flag)? fopen(osPath, "r"):fopen(osPath, "w");
-    
-    as = (arithStream) calloc(1, sizeof(struct arithStream_t));
-    as->stats = initialize_stream_stats_Chars(BP_trans);
-    as->a = initialize_arithmetic_encoder(m_CHARS);
-    as->os = initialize_osStream(1, fos, NULL, decompressor_flag);
-    as->a->t = (decompressor_flag)? read_uint32_from_stream(as->a->m, as->os):0;
-    
-    *(osPath + osPathLength) = 0;
-    
-    return as;
-    
-}
-
-fasta_compressor initialize_fasta_compressor(char osPath[], uint8_t streamDirection, chromosome chr){
-    
-    fasta_compressor s;
-    uint8_t** BP_transitions;
-    
-    s = calloc(1, sizeof(struct fasta_compressor_t));
-    
-    s->Signs = initialize_arithStream_Signs(osPath, streamDirection);
-    
-    s->Ints = initialize_arithStream_Ints(osPath, streamDirection);
-    
-    if (streamDirection == COMPRESSION) {
-        BP_transitions = generate_char_transitions(chr, s->Signs);
-    }
-    else
-        BP_transitions = regenerate_char_transitions(s->Signs);
-    
-    
-    s->Chars = initialize_arithStream_Chars(osPath, streamDirection, BP_transitions);
+    s->Quals = initialize_arithStream(osPath, streamDirection, q_list);
     
     
     return s;

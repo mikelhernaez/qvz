@@ -6,9 +6,9 @@
 //  Copyright (c) 2014 Mikel Hernaez. All rights reserved.
 //
 
-#ifndef iDoComp_v1_fasta_compressor_h
+#ifndef qv_compressor_h
 
-#define iDoComp_v1_fasta_compressor_h
+#define qv_compressor_h
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -23,21 +23,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_CARDINALITY 1000000
-#define MAX_ALPHA 300000000
+#include "codebook.h"
 
-#define m_INTS  18
-#define m_CHARS 13
-#define m_SIGNS 23
+#define m_arith  18
 
-//#define mI 18
-//#define mc 13
-//#define mS 23
 
 #define COMPRESSION 0
 #define DECOMPRESSION 1
-
-typedef enum BASEPAIRS{bp_A,bp_C,bp_G,bp_T,bp_N,bp_U,bp_R,bp_Y,bp_K,bp_M,bp_S,bp_W,bp_B,bp_D,bp_H, bp_V, bp_X, bp_a,bp_c,bp_g,bp_t,bp_n,bp_u,bp_r,bp_y,bp_k,bp_m,bp_s,bp_w,bp_b,bp_d,bp_h, bp_v, bp_x} BASEPAIR;
 
 typedef struct Arithmetic_code_t{
     
@@ -61,10 +53,7 @@ typedef struct osStream_t{
 
 typedef struct stream_stats_t{
     
-    int32_t *alphabet;
     uint32_t *counts;
-    int32_t *alphaMap;
-    uint8_t *alphaExist;
     uint32_t alphabetCard;
     uint32_t step;
     uint32_t n;
@@ -72,16 +61,14 @@ typedef struct stream_stats_t{
 }*stream_stats;
 
 typedef struct arithStream_t{
-    stream_stats* stats;
+    stream_stats** stats;
     Arithmetic_code a;
     osStream os;
 }*arithStream;
 
-typedef struct fasta_compressor_t{
-    arithStream Ints;
-    arithStream Chars;
-    arithStream Signs;
-}*fasta_compressor;
+typedef struct qv_compressor_t{
+    arithStream Quals;
+}*qv_compressor;
 
 
 
@@ -99,25 +86,16 @@ int encoder_last_step(Arithmetic_code a, osStream os);
 uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats stats, osStream is);
 uint32_t decoder_last_step(Arithmetic_code a, stream_stats stats);
 
-stream_stats* initialize_stream_stats_Ints();
-stream_stats* initialize_stream_stats_Chars(uint8_t **BP_trans);
-stream_stats* initialize_stream_stats_Signs();
+stream_stats** initialize_stream_stats(struct cond_quantizer_list_t *q_list);
 
-uint32_t rescale_stats(stream_stats s);
-uint32_t rescale_stats_var(stream_stats s);
-uint32_t update_stats_Ints(stream_stats stats, int32_t x, uint32_t m, uint8_t stepSize);
-uint32_t update_stats_Chars(stream_stats stats, int32_t x, uint32_t m);
-uint32_t update_stats_Signs(stream_stats stats, int32_t x, uint32_t m);
+uint32_t update_stats(stream_stats stats, int32_t x, uint32_t m);
 
-uint8_t extract_byte(unsigned int x, uint8_t B);
+uint32_t compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx);
+uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx);
 
-uint32_t compress_Signs(arithStream I, uint32_t x);
-uint32_t decompress_Signs(arithStream I);
-uint32_t compress_Int_Byte(arithStream I, uint32_t x, unsigned int B);
-uint32_t decompress_Int_Byte(arithStream I, unsigned int B);
-void compress_Ints(arithStream I, uint32_t x);
-uint32_t decompress_Ints(arithStream I);
-uint32_t compress_Chars(arithStream I, char target, char ref);
-char decompress_Chars(arithStream I, char ref);
+qv_compressor initialize_qv_compressor(char osPath[], uint8_t streamDirection, struct cond_quantizer_list_t *q_list);
+
+uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list_t *qlist, uint32_t *num_lines, double *dis);
+
 
 #endif

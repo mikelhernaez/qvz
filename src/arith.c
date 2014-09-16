@@ -7,8 +7,7 @@
 //
 
 #include <stdio.h>
-#include "os_stream.c"
-#include "stats.c"
+#include "qv_compressor.h"
 
 Arithmetic_code initialize_arithmetic_encoder(uint32_t m){
     
@@ -35,8 +34,12 @@ uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t 
     
     range = a->u - a->l + 1;
     
-    for (i = -1; i <= x; i++)
+    for (i = -1; i <= x; i++){
         cumCountX += stats->counts[i];
+        if (i > (int) stats->alphabetCard) {
+            printf("fuckkk\n");
+        }
+    }
     
     cumCountX_1 = cumCountX - stats->counts[i-1];
     
