@@ -25,7 +25,7 @@
 
 #include "codebook.h"
 
-#define m_arith  18
+#define m_arith  22
 
 
 #define COMPRESSION 0
@@ -96,6 +96,6 @@ uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx);
 qv_compressor initialize_qv_compressor(char osPath[], uint8_t streamDirection, struct cond_quantizer_list_t *q_list);
 
 uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list_t *qlist, uint32_t *num_lines, double *dis);
-
+uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_list_t *qlist, uint32_t *num_lines);
 
 #endif

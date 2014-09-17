@@ -98,28 +98,40 @@ stream_stats** initialize_stream_stats(struct cond_quantizer_list_t *q_list){
 arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, struct cond_quantizer_list_t *q_list){
     
     arithStream as;
-    FILE *fos;
+    FILE *fp;
     
     uint32_t osPathLength = (uint32_t)strlen(osPath), i = 0;
     
     strcat(osPath, ".qvz");
-    fos = (decompressor_flag)? fopen(osPath, "r"):fopen(osPath, "w");
+    fp = (decompressor_flag)? fopen(osPath, "r"):fopen(osPath, "w");
     
-    // Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
-	srand((uint32_t) time(0));
-	for (i = 0; i < 32; ++i) {
-		q_list->well.state[i] = rand();
-		// Testing with fixed state to look for consistency!
-		//qlist->well.state[s] = 0x55555555;
+    if (decompressor_flag) {
+        
+        // First, read in the WELL state and set up the PRNG
+        fread(q_list->well.state, sizeof(uint32_t), 32, fp);
+    }
+    
+    else {
+    
+        // Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
+        srand((uint32_t) time(0));
+        for (i = 0; i < 32; ++i) {
+            q_list->well.state[i] = rand();
+            // Testing with fixed state to look for consistency!
+            //qlist->well.state[s] = 0x55555555;
+        }
+        
+        // Write the initial WELL state vector to the file first (fixed size of 32 bytes)
+        fwrite(q_list->well.state, sizeof(uint32_t), 32, fp);
+        
 	}
 	
-	// Write the initial WELL state vector to the file first (fixed size of 32 bytes)
-	if(decompressor_flag == 0)fwrite(q_list->well.state, sizeof(uint32_t), 32, fos);
+	
     
     as = (arithStream) calloc(1, sizeof(struct arithStream_t));
     as->stats = initialize_stream_stats(q_list);
     as->a = initialize_arithmetic_encoder(m_arith);
-    as->os = initialize_osStream(1, fos, NULL, decompressor_flag);
+    as->os = initialize_osStream(1, fp, NULL, decompressor_flag);
     as->a->t = (decompressor_flag)? read_uint32_from_stream(as->a->m, as->os):0;
     
     *(osPath + osPathLength) = 0;

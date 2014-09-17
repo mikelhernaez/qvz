@@ -37,7 +37,7 @@ uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t 
     for (i = -1; i <= x; i++){
         cumCountX += stats->counts[i];
         if (i > (int) stats->alphabetCard) {
-            printf("fuckkk\n");
+            printf("Something wrong with the Stats!!\n");
         }
     }
     
@@ -45,6 +45,10 @@ uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t 
     
     a->u = a->l + (uint32_t)( (range * cumCountX) / stats->n ) - 1;
     a->l = a->l + (uint32_t)( (range * cumCountX_1 ) / stats->n );
+    
+    if(a->l > a->u){
+        printf("ERRORRRRRR\n");
+    }
     
     // Check the rescaling conditions
     msbL = a->l >> (a->m - 1);

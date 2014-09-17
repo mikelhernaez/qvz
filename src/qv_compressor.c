@@ -50,6 +50,10 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
     
     line = (char *) calloc(4096, sizeof(char));
     
+    ////// For debuging //////
+    //FILE *fref = fopen("/tmp/fref.txt", "w");
+    //////////////////////////
+    
     // Initialize the compressor
     qvc = initialize_qv_compressor(osPath, COMPRESSION, qlist);
     
@@ -57,6 +61,7 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
     columns = qlist->columns;
 	distortion = 0.0;
 	fgets(line, columns+2, fp);
+    
 	do {
         
         if(lineCtr%1000000 == 0){
@@ -72,7 +77,12 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
 		qv = q->q[line[0]-33];
         
         q_state = get_symbol_index(q->output_alphabet, qv);
-        compress_qv(qvc->Quals, q_state, 0, 0);
+        compress_qv(qvc->Quals, q_state, 0, idx);
+        
+        ////// For debuging //////
+        //fprintf(fref, "%d ", q_state);
+        //////////////////////////
+        
 		error = (line[0] - qv - 33)*(line[0] -qv - 33);
         
         prev_qv = qv;
@@ -86,12 +96,20 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
             
             q_state = get_symbol_index(q->output_alphabet, qv);
             
+            ////// For debuging //////
+            //fprintf(fref, "%d ", q_state);
+            //////////////////////////
+            
             compress_qv(qvc->Quals, q_state, s, idx);
             
 			error += (line[s] - qv - 33)*(line[s] - qv - 33);
             
             prev_qv = qv;
 		}
+        
+        ////// For debuging //////
+        //fputc('\n', fref);
+        //////////////////////////
         
         distortion += error / ((double) columns);
         
@@ -106,6 +124,110 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
     *dis = distortion / ((double) lineCtr);
     
     return osSize;
+    
+}
+
+uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_list_t *qlist, uint32_t *num_lines){
+    
+    qv_compressor qvc;
+    
+	uint32_t s = 0, idx = 0, lineCtr = 0, q_state = 0;
+    uint8_t prev_qv = 0;
+	char *line;
+    
+    uint32_t columns;
+    struct quantizer_t *q;
+    
+    line = (char *) calloc(4096, sizeof(char));
+    
+    // Initialize the compressor
+    qvc = initialize_qv_compressor(isPath, DECOMPRESSION, qlist);
+    
+    // Start decompressing the file
+    columns = qlist->columns;
+    line[columns] = '\n';
+    
+	while (lineCtr < *num_lines - 1) {
+        
+        if(lineCtr%1000000 == 0){
+            printf("Line: %dM\n", lineCtr/1000000);
+        }
+        lineCtr++;
+        
+		// Select first column's codebook with no left context
+		q = choose_quantizer(qlist, 0, 0, &idx);
+        
+		// Quantize, compress and calculate error simultaneously
+		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
+
+        q_state = decompress_qv(qvc->Quals, 0, idx);
+        line[0] = q->output_alphabet->symbols[q_state] + 33;
+        
+        prev_qv = line[0] - 33;
+        
+		for (s = 1; s < columns; ++s) {
+            
+			// Quantize and compute error for MSE
+			q = choose_quantizer(qlist, s, prev_qv, &idx);
+            
+            q_state = decompress_qv(qvc->Quals, s, idx);
+            
+            line[s] = q->output_alphabet->symbols[q_state] + 33;
+            
+            prev_qv = line[s] - 33;
+            
+		}
+        
+        // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
+		fwrite(line, columns+1, sizeof(uint8_t), fop);
+        
+        // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
+		//for(int lala = 0; lala < 36; lala++)
+        //    fprintf(fop, "%d ", line[lala]);
+        //fputc('\n', fop);
+        
+	}
+    
+    // Last Line
+    if(lineCtr%1000000 == 0){
+        printf("Line: %dM\n", lineCtr/1000000);
+    }
+    lineCtr++;
+    
+    // Select first column's codebook with no left context
+    q = choose_quantizer(qlist, 0, 0, &idx);
+    
+    // Quantize, compress and calculate error simultaneously
+    // Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
+    
+    q_state = decompress_qv(qvc->Quals, 0, 0);
+    line[0] = q->output_alphabet->symbols[q_state] + 33;
+    
+    prev_qv = line[0] - 33;
+    
+    for (s = 1; s < columns - 1; ++s) {
+        
+        // Quantize and compute error for MSE
+        q = choose_quantizer(qlist, s, prev_qv, &idx);
+        
+        q_state = decompress_qv(qvc->Quals, s, idx);
+        
+        line[s] = q->output_alphabet->symbols[q_state] + 33;
+        
+        prev_qv = line[s] - 33;
+    }
+    
+    // Last column
+    q = choose_quantizer(qlist, s, prev_qv, &idx);
+    q_state =decoder_last_step(qvc->Quals->a, qvc->Quals->stats[s][idx]);
+    line[s] = q->output_alphabet->symbols[q_state] + 33;
+    
+    // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
+    fwrite(line, columns+1, sizeof(uint8_t), fop);
+    
+    *num_lines = lineCtr;
+    
+    return 0;
     
 }
 
