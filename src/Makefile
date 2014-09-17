@@ -1,11 +1,9 @@
 # Makefile for building C programs to do encoding, decoding, and clustering
 
-ENC_SRC=well.c codebook.c main.c util.c lines.c quantizer.c pmf.c distortion.c qv_stream.c qv_compressor.c arith.c os_stream.c
-DEC_SRC=well.c codebook.c decoder.c util.c lines.c quantizer.c pmf.c distortion.c qv_stream.c qv_compressor.c arith.c os_stream.c
+SRC=well.c codebook.c main.c util.c lines.c quantizer.c pmf.c distortion.c qv_stream.c qv_compressor.c arith.c os_stream.c
 CLUSTER_SRC=cluster.c util.c
 
-ENC_OBJ=$(ENC_SRC:.c=.o)
-DEC_OBJ=$(DEC_SRC:.c=.o)
+OBJ=$(SRC:.c=.o)
 CLUSTER_OBJ=$(CLUSTER_SRC:.c=.o)
 
 CC=gcc
@@ -17,16 +15,13 @@ LDFLAGS=-lc -lm -lrt
 %.o : %.c
 	$(CC) $(CLFAGS) -c $<
 
-all : encoder decoder
+all : qvz
 
 cluster : $(CLUSTER_OBJ)
 	$(CC) $(LDFLAGS) $(CLUSTER_OBJ) -o cluster
 
-encoder : $(ENC_OBJ)
-	$(CC) $(LDFLAGS) $(ENC_OBJ) -o encoder
-
-decoder : $(DEC_OBJ)
-	$(CC) $(LDFLAGS) $(DEC_OBJ) -o decoder
+qvz : $(OBJ)
+	$(CC) $(LDFLAGS) $(OBJ) -o qvz
 
 clean :
-	$(RM) *.o encoder decoder cluster test
+	$(RM) *.o qvz

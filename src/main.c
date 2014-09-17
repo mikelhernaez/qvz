@@ -16,11 +16,10 @@ char *default_input = "quality_lines.txt";
 char *default_output = "c_bitpacked_quality_lossy.txt";
 char *default_codebook = "codebook.txt";
 
-
 /**
- * Actually does the encoding (and also tests decoding to ensure correctness)
+ *
  */
-int main_encoding(char *input_name, char *output_name, char *codebook_name) {
+void encode(char *input_name, char *output_name, char *codebook_name) {
 	FILE *fp, *fref;
 	uint32_t columns;
     
@@ -28,7 +27,6 @@ int main_encoding(char *input_name, char *output_name, char *codebook_name) {
 	uint64_t bytes_used;
 	uint32_t num_lines = 0;
 	double distortion = 0.0;
-
     
 	// New variables, definitely used
 	struct distortion_t *dist = generate_distortion_matrix(41, DISTORTION_MSE);
@@ -46,12 +44,11 @@ int main_encoding(char *input_name, char *output_name, char *codebook_name) {
 	status = load_file(input_name, &training_file, 1000000);
 	if (status != LF_ERROR_NONE) {
 		printf("load_file returned error: %d\n", status);
-		return 1;
+		exit(1);
 	}
     
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
 	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, &distortion);
-    //	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0.5, 0, &distortion);
 	columns = qlist->columns;
     
 	stop_timer(&stats);
@@ -72,31 +69,23 @@ int main_encoding(char *input_name, char *output_name, char *codebook_name) {
 	write_codebook(codebook_name, qlist);
     
     bytes_used = start_qv_compression(fp, output_name, qlist, &num_lines, &distortion);
-    
 	fclose(fp);
-    
 	
 	stop_timer(&encoding);
 	stop_timer(&total);
     
-	// Compress with LZMA and obtain file information to calculate size and rate
+	// Summary stats from measurement
 	printf("MSE: %f\n", distortion);
-    //	printf("Filesize: %ld bytes\n", finfo.st_size);
 	printf("Lines: %d\n", num_lines);
 	printf("Total bytes used: %llu\n", bytes_used);
-    //	printf("Rate: %f\n", finfo.st_size*8./(((double)j)*columns));
 	printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
 	printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
-    
-#ifndef LINUX
-	system("pause");
-#endif
-    
-	return 0;
 }
 
-int main_decoding(char *input_file, char *output_file, char* codebook_file) {
-    
+/**
+ *
+ */
+void decode(char *input_file, char *output_file, char* codebook_file) {
 	FILE *fin, *fout;
 	uint32_t columns;
 	uint32_t num_lines = 19455048;
@@ -123,8 +112,6 @@ int main_decoding(char *input_file, char *output_file, char* codebook_file) {
 		exit(1);
 	}
     
-    // Start decompressing the file
-
     start_qv_decompression(fout, input_file, qlist, &num_lines);
     
 	// Close the files and we are done decoding
@@ -134,23 +121,26 @@ int main_decoding(char *input_file, char *output_file, char* codebook_file) {
 	stop_timer(&timer);
 	printf("Decoded %d lines in %f seconds.\n", num_lines, get_timer_interval(&timer));
     
-#ifndef LINUX
-	system("pause");
-#endif
-    
-	return 0;
 }
 
+/**
+ * Displays a usage name
+ * @param name Program name string
+ */
+void usage(char *name) {
+	printf("Usage: %s [mode] [codebook file] [input file] [output file]\n", name);
+	printf("Where [mode] is -c for compression and -d for decompression\n");
+}
 
-int main(int argc, char **argv){
-    
+/**
+ *
+ */
+int main(int argc, char **argv) {
     char *input_name, *output_name, *codebook_name;
     
 	// Check for arguments and get file names
 	if (argc != 5) {
-		// Print usage guidelines
-		printf("Usage: %s [mode] [codebook file][input file] [output file]\n", argv[0]);
-        printf("Where [mode] is -c for compression and -d for decompression\n");
+		usage(argv[0]);
 		
 		// Attempted to run from command line but not all arguments are present
 		if (argc > 1) {
@@ -170,211 +160,17 @@ int main(int argc, char **argv){
 		output_name = argv[4];
 	}
     
-    if ( strcmp(argv[1], "-c") == 0 ) {
-        main_encoding(input_name, output_name, codebook_name);
+    if (strcmp(argv[1], "-c") == 0) {
+        encode(input_name, output_name, codebook_name);
     }
-    else if ( strcmp(argv[1], "-d") == 0 ) {
-        main_decoding(input_name, output_name, codebook_name);
+    else if (strcmp(argv[1], "-d") == 0) {
+        decode(input_name, output_name, codebook_name);
     }
-    else
-        printf("Use -c for compression or -d for decompression\n");
-}
-
-
-/**
- * Actually does the encoding (and also tests decoding to ensure correctness)
- */
-int main_lzma(int argc, char **argv) {
-	FILE *fp, *fbitout, *fref;
-	uint32_t columns;
-
-	// Old variables, might not all be needed as we improve the implementation
-	uint64_t bits_used;
-	uint32_t j = 0, s = 0, u = 0, k = 0;
-	double distortion = 0.0;
-	uint32_t error = 0;
-	uint8_t state_enc = 0;
-	uint8_t mask = 0;
-	char *line;
-	uint8_t *outline, *stateline, *precodeline;
-	uint8_t *bits;
-
-	// New variables, definitely used
-	struct distortion_t *dist = generate_distortion_matrix(41, DISTORTION_MSE);
-	struct alphabet_t *alphabet = alloc_alphabet(41);
-	struct quality_file_t training_file;
-	struct cond_pmf_list_t *training_stats;
-	struct cond_quantizer_list_t *qlist;
-	uint32_t status;
-	struct hrtimer_t stats, encoding, total;
-	const char *input_name, *output_name;
-	struct quantizer_t *q;
-    
-    
-    uint32_t dummy_idx = 0;
-
-	// Check for arguments and get file names
-	if (argc != 3) {
-		// Print usage guidelines
-		printf("Usage: %s [input file] [output file]\n", argv[0]);
-		
-		// Attempted to run from command line but not all arguments are present
-		if (argc > 1) {
-			printf("Incorrect number of arguments supplied!");
-			exit(1);
-		}
-		else {
-			printf("Using default input file: %s\nDefault output file: %s.\n", default_input, default_output);
-			input_name = default_input;
-			output_name = default_output;
-		}
-	}
-	else {
-		input_name = argv[1];
-		output_name = argv[2];
-	}
-
-	start_timer(&total);
-	start_timer(&stats);
-
-	// Load file statistics and find statistics for the training data
-	status = load_file(input_name, &training_file, 1000000);
-	if (status != LF_ERROR_NONE) {
-		printf("load_file returned error: %d\n", status);
-		return 1;
-	}
-
-	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, &distortion);
-//	qlist = generate_codebooks_greg(&training_file, training_stats, dist, 0.5, 0, &distortion);
-	columns = qlist->columns;
-
-	stop_timer(&stats);
-	start_timer(&encoding);
-
-	printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
-	printf("Expected distortion: %f\n", distortion);
-
-	// Allocate space for the stuff we're going to use to store what is being written to a file
-	line = (char *) calloc(4096, sizeof(char));
-	outline = (uint8_t *) calloc(columns, sizeof(uint8_t));
-	stateline = (uint8_t *) calloc(columns, sizeof(uint8_t));
-	precodeline = (uint8_t *) calloc(columns, sizeof(uint8_t));
-	bits = (uint8_t *) calloc(columns, sizeof(uint8_t));
-	
-	// Now, open the input file and the output file
-	fp = fopen(input_name, "rt");
-	fbitout = fopen(output_name, "wb");
-	fref = fopen("ref.txt", "wt");
-	if (!fp) {
-		perror("Unable to open input file");
+    else {
+		usage(argv[0]);
+		printf("Missing required -c or -d!");
 		exit(1);
 	}
-	if (!fbitout) {
-		perror("Unable to open output file");
-		exit(1);
-	}
-	
-	// Temporary: write codebook to separate file (soon it will be included in the compressed file)
-	write_codebook("new_codebook.txt", qlist);
-
-	// Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
-	srand((uint32_t) time(0));
-	for (s = 0; s < 32; ++s) {
-		qlist->well.state[s] = rand();
-		// Testing with fixed state to look for consistency!
-		//qlist->well.state[s] = 0x55555555;
-	}
-	
-	// Write the initial WELL state vector to the file first (fixed size of 32 bytes)
-	fwrite(qlist->well.state, sizeof(uint32_t), 32, fbitout);
-    
-	bits_used = 0;
-	j = 0;
-	distortion = 0.0;
-	fgets(line, columns+2, fp);
-	do {
-		// State encoding is offset from the main loop iteration by one because we need
-		// to use the un-encoded version to select the next codebook. After adding the precodeline
-		// variable this could be fixed but now I'm too lazy to go back. Also, in a fast implementation
-		// that didn't need to immediately decode to check its work, there is no point for the precode (comparison)
-		// variable, so we'd have to stick to this type of loop organization
-
-		// Select first column's codebook with no left context
-		q = choose_quantizer(qlist, 0, 0, &dummy_idx);
-
-		// Quantize and calculate error simultaneously
-		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
-		outline[0] = q->q[line[0]-33];
-		precodeline[0] = outline[0]+33;
-		error = (line[0] - outline[0] - 33)*(line[0] - outline[0] - 33);
-		state_enc = find_state_encoding(q, outline[0]);
-		bits[0] = cb_log2(q->output_alphabet->size);
-
-		for (s = 1; s < columns; ++s) {
-			// Quantize and compute error for MSE
-			q = choose_quantizer(qlist, s, outline[s-1], &dummy_idx);
-			outline[s] = q->q[line[s]-33];
-			precodeline[s] = outline[s]+33;
-			error += (line[s] - outline[s] - 33)*(line[s] - outline[s] - 33);
-
-			// Save the state encoded version over the previous value
-			outline[s-1] = state_enc;
-			// Bits will not be used once the arithmetic coder is added so we can afford to simply calculate them every time here for now
-			bits[s] = cb_log2(q->output_alphabet->size);
-			state_enc = find_state_encoding(q, outline[s]);
-		}
-		outline[columns-1] = state_enc;
-		distortion += error / ((double) columns);
-
-		// Bit-pack the state encoding output
-		memset(stateline, 0, columns*sizeof(char));
-		u = 0;
-		k = 0;
-		for (s = 0; s < columns; ++s) {
-			// k represents the bit offset we have here
-			mask = (1 << bits[s]) - 1;
-			stateline[u] |= ((outline[s] & mask) << k);
-			k += bits[s];
-			
-			// Check if there are leftover bits, put them into the next symbol
-			if (k > 7) {
-				u += 1;
-				k -= 8;
-				mask = (1 << k) - 1;
-				stateline[u] |= (outline[s] >> (bits[s] - k)) & mask;
-			}
-
-			bits_used += bits[s];
-		}
-
-		// Write to file
-		if (k > 0)
-			u += 1;
-		fwrite(stateline, sizeof(char), u, fbitout);
-//		fwrite(outline, sizeof(char), columns, fbitout);
-		fwrite(precodeline, sizeof(char), columns, fref);
-		fwrite("\n", 1, 1, fref);
-
-		// Get next line from file
-		j += 1;
-		fgets(line, columns+2, fp);
-	} while (!feof(fp));
-	fclose(fp);
-	fclose(fbitout);
-
-	distortion = distortion / ((double) j);
-	stop_timer(&encoding);
-	stop_timer(&total);
-
-	// Compress with LZMA and obtain file information to calculate size and rate
-	printf("MSE: %f\n", distortion);
-//	printf("Filesize: %ld bytes\n", finfo.st_size);
-	printf("Lines: %d\n", j);
-	printf("Total bits used: %llu\n", bits_used);
-//	printf("Rate: %f\n", finfo.st_size*8./(((double)j)*columns));
-	printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
-	printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
 
 #ifndef LINUX
 	system("pause");
@@ -382,3 +178,4 @@ int main_lzma(int argc, char **argv) {
 
 	return 0;
 }
+
