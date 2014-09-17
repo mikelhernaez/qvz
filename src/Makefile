@@ -1,7 +1,7 @@
 # Makefile for building C programs to do encoding, decoding, and clustering
 
-ENC_SRC=well.c codebook.c main.c util.c lines.c quantizer.c pmf.c distortion.c
-DEC_SRC=well.c codebook.c decoder.c util.c lines.c quantizer.c pmf.c distortion.c
+ENC_SRC=well.c codebook.c main.c util.c lines.c quantizer.c pmf.c distortion.c qv_stream.c qv_compressor.c arith.c os_stream.c
+DEC_SRC=well.c codebook.c decoder.c util.c lines.c quantizer.c pmf.c distortion.c qv_stream.c qv_compressor.c arith.c os_stream.c
 CLUSTER_SRC=cluster.c util.c
 
 ENC_OBJ=$(ENC_SRC:.c=.o)
