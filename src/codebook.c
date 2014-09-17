@@ -581,7 +581,7 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
 	columns = (line[0] & 0xff) | ((line[1] << 8) & 0xff00) | ((line[2] << 16) & 0xff0000) | ((line[3] << 24) & 0xff000000);
 	columns = ntohl(columns);
-	lines = (line[4] & 0xff) | ((line[5] << 8) & 0xff00) | ((line[6] << 16) & 0xff000000) | ((line[7] << 24) & 0xff000000);
+	lines = (line[4] & 0xff) | ((line[5] << 8) & 0xff00) | ((line[6] << 16) & 0xff0000) | ((line[7] << 24) & 0xff000000);
 	qlist = alloc_conditional_quantizer_list(columns);
 	uniques = alloc_alphabet(1);
 	cond_quantizer_init_column(qlist, 0, uniques);

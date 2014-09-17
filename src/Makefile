@@ -9,7 +9,7 @@ CLUSTER_OBJ=$(CLUSTER_SRC:.c=.o)
 CC=gcc
 RM=rm -f
 
-CLFAGS=-O3 -Wall -fomit-frame-pointer -I../include -DLINUX -ggdb
+CLFAGS=-O3 -Wall -fomit-frame-pointer -I../include -DLINUX
 LDFLAGS=-lc -lm -lrt
 
 %.o : %.c
