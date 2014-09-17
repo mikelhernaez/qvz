@@ -12,7 +12,7 @@
 /**
  * Decodes the file given to produce a quality value file
  */
-int main(int argc, char **argv) {
+int main_decoder(int argc, char **argv) {
 	FILE *fin, *fout;
 	uint32_t columns;
 	uint8_t *data, *line;

@@ -14,11 +14,13 @@
 // @todo remove from final version
 char *default_input = "quality_lines.txt";
 char *default_output = "c_bitpacked_quality_lossy.txt";
+char *default_codebook = "codebook.txt";
+
 
 /**
  * Actually does the encoding (and also tests decoding to ensure correctness)
  */
-int main(int argc, char **argv) {
+int main_encoding(char *input_name, char *output_name, char *codebook_name) {
 	FILE *fp, *fref;
 	uint32_t columns;
     
@@ -36,28 +38,6 @@ int main(int argc, char **argv) {
 	struct cond_quantizer_list_t *qlist;
 	uint32_t status;
 	struct hrtimer_t stats, encoding, total;
-	char *input_name, *output_name;
-    
-	// Check for arguments and get file names
-	if (argc != 3) {
-		// Print usage guidelines
-		printf("Usage: %s [input file] [output file]\n", argv[0]);
-		
-		// Attempted to run from command line but not all arguments are present
-		if (argc > 1) {
-			printf("Incorrect number of arguments supplied!");
-			exit(1);
-		}
-		else {
-			printf("Using default input file: %s\nDefault output file: %s.\n", default_input, default_output);
-			input_name = default_input;
-			output_name = default_output;
-		}
-	}
-	else {
-		input_name = argv[1];
-		output_name = argv[2];
-	}
     
 	start_timer(&total);
 	start_timer(&stats);
@@ -89,7 +69,7 @@ int main(int argc, char **argv) {
 	}
 	
 	// Temporary: write codebook to separate file (soon it will be included in the compressed file)
-	write_codebook("new_codebook.txt", qlist);
+	write_codebook(codebook_name, qlist);
     
     bytes_used = start_qv_compression(fp, output_name, qlist, &num_lines, &distortion);
     
@@ -113,6 +93,91 @@ int main(int argc, char **argv) {
 #endif
     
 	return 0;
+}
+
+int main_decoding(char *input_file, char *output_file, char* codebook_file) {
+    
+	FILE *fin, *fout;
+	uint32_t columns;
+	uint32_t num_lines = 19455048;
+
+	struct hrtimer_t timer;
+	struct cond_quantizer_list_t *qlist;
+	struct alphabet_t *A = alloc_alphabet(41);
+    
+	start_timer(&timer);
+    
+	// Read in the codebook and find out how many columns we have
+	qlist = read_codebook(codebook_file, A);
+	columns = qlist->columns;
+    
+	// Open the files we're reading/writing and bail on a failure
+	fin = fopen(input_file, "rb");
+	fout = fopen(output_file, "wt");
+	if (!fin) {
+		perror("Unable to open input file");
+		exit(1);
+	}
+	if (!fout) {
+		perror("Unable to open output file");
+		exit(1);
+	}
+    
+    // Start decompressing the file
+
+    start_qv_decompression(fout, input_file, qlist, &num_lines);
+    
+	// Close the files and we are done decoding
+	fclose(fin);
+	fclose(fout);
+    
+	stop_timer(&timer);
+	printf("Decoded %d lines in %f seconds.\n", num_lines, get_timer_interval(&timer));
+    
+#ifndef LINUX
+	system("pause");
+#endif
+    
+	return 0;
+}
+
+
+int main(int argc, char **argv){
+    
+    char *input_name, *output_name, *codebook_name;
+    
+	// Check for arguments and get file names
+	if (argc != 5) {
+		// Print usage guidelines
+		printf("Usage: %s [mode] [codebook file][input file] [output file]\n", argv[0]);
+        printf("Where [mode] is -c for compression and -d for decompression\n");
+		
+		// Attempted to run from command line but not all arguments are present
+		if (argc > 1) {
+			printf("Incorrect number of arguments supplied!");
+			exit(1);
+		}
+		else {
+			printf("Using default input file: %s\nDefault output file: %s.\nDefault codebook file:%s\n", default_input, default_output, default_codebook);
+			input_name = default_input;
+			output_name = default_output;
+            codebook_name = default_codebook;
+		}
+	}
+	else {
+        codebook_name = argv[2];
+		input_name = argv[3];
+		output_name = argv[4];
+	}
+    
+    if ( strcmp(argv[1], "-c") == 0 ) {
+        main_encoding(input_name, output_name, codebook_name);
+    }
+    else if ( strcmp(argv[1], "-d") == 0 ) {
+        main_decoding(input_name, output_name, codebook_name);
+    }
+    else
+        printf("Use -c for compression or -d for decompression\n");
 }
 
 
