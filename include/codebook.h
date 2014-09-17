@@ -37,6 +37,7 @@ struct cond_pmf_list_t {
  */
 struct cond_quantizer_list_t {
 	uint32_t columns;
+	uint32_t lines;
 	struct alphabet_t **input_alphabets;
 	struct quantizer_t ***q;
 	double **ratio;				// Raw ratio
@@ -72,7 +73,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers);
 struct cond_quantizer_list_t *read_codebook(const char *filename, const struct alphabet_t *A);
 
-#define MAX_CODEBOOK_LINE_LENGTH 4096
+#define MAX_CODEBOOK_LINE_LENGTH 3366
 #define COPY_Q_TO_LINE(line, q, i, size) for (i = 0; i < size; ++i) { line[i] = q[i] + 33; }
 #define COPY_Q_FROM_LINE(line, q, i, size) for (i = 0; i < size; ++i) { q[i] = line[i] - 33; }
 

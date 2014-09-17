@@ -99,10 +99,8 @@ arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, stru
     
     arithStream as;
     FILE *fp;
+	uint32_t i;
     
-    uint32_t osPathLength = (uint32_t)strlen(osPath), i = 0;
-    
-    strcat(osPath, ".qvz");
     fp = (decompressor_flag)? fopen(osPath, "r"):fopen(osPath, "w");
     
     if (decompressor_flag) {
@@ -133,8 +131,6 @@ arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, stru
     as->a = initialize_arithmetic_encoder(m_arith);
     as->os = initialize_osStream(1, fp, NULL, decompressor_flag);
     as->a->t = (decompressor_flag)? read_uint32_from_stream(as->a->m, as->os):0;
-    
-    *(osPath + osPathLength) = 0;
     
     return as;
     

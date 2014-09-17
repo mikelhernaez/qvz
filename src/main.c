@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
-#include <time.h>
 
 #include "codebook.h"
 #include "qv_compressor.h"
@@ -20,14 +19,6 @@ char *default_codebook = "codebook.txt";
  *
  */
 void encode(char *input_name, char *output_name, char *codebook_name) {
-	FILE *fp, *fref;
-	uint32_t columns;
-    
-	// Old variables, might not all be needed as we improve the implementation
-	uint64_t bytes_used;
-	uint32_t num_lines = 0;
-	double distortion = 0.0;
-    
 	// New variables, definitely used
 	struct distortion_t *dist = generate_distortion_matrix(41, DISTORTION_MSE);
 	struct alphabet_t *alphabet = alloc_alphabet(41);
@@ -36,6 +27,9 @@ void encode(char *input_name, char *output_name, char *codebook_name) {
 	struct cond_quantizer_list_t *qlist;
 	uint32_t status;
 	struct hrtimer_t stats, encoding, total;
+	FILE *fp;
+	uint64_t bytes_used;
+	double distortion = 0.0;
     
 	start_timer(&total);
 	start_timer(&stats);
@@ -49,7 +43,6 @@ void encode(char *input_name, char *output_name, char *codebook_name) {
     
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
 	qlist = generate_codebooks(&training_file, training_stats, dist, 0.5, &distortion);
-	columns = qlist->columns;
     
 	stop_timer(&stats);
 	start_timer(&encoding);
@@ -57,26 +50,24 @@ void encode(char *input_name, char *output_name, char *codebook_name) {
 	printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
 	printf("Expected distortion: %f\n", distortion);
     
-	// Now, open the input file and the output file
 	fp = fopen(input_name, "rt");
-	fref = fopen("ref.txt", "wt");
 	if (!fp) {
 		perror("Unable to open input file");
 		exit(1);
 	}
 	
-	// Temporary: write codebook to separate file (soon it will be included in the compressed file)
-	write_codebook(codebook_name, qlist);
-    
-    bytes_used = start_qv_compression(fp, output_name, qlist, &num_lines, &distortion);
+    bytes_used = start_qv_compression(fp, output_name, qlist, &distortion);
 	fclose(fp);
+
+	// Write codebook second so that we know how many lines were encoded
+	write_codebook(codebook_name, qlist);
 	
 	stop_timer(&encoding);
 	stop_timer(&total);
     
 	// Summary stats from measurement
-	printf("MSE: %f\n", distortion);
-	printf("Lines: %d\n", num_lines);
+	printf("Actual distortion: %f\n", distortion);
+	printf("Lines: %d\n", qlist->lines);
 	printf("Total bytes used: %llu\n", bytes_used);
 	printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
 	printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
@@ -86,40 +77,26 @@ void encode(char *input_name, char *output_name, char *codebook_name) {
  *
  */
 void decode(char *input_file, char *output_file, char* codebook_file) {
-	FILE *fin, *fout;
-	uint32_t columns;
-	uint32_t num_lines = 19455048;
-
+	FILE *fout;
 	struct hrtimer_t timer;
 	struct cond_quantizer_list_t *qlist;
 	struct alphabet_t *A = alloc_alphabet(41);
     
 	start_timer(&timer);
     
-	// Read in the codebook and find out how many columns we have
 	qlist = read_codebook(codebook_file, A);
-	columns = qlist->columns;
     
-	// Open the files we're reading/writing and bail on a failure
-	fin = fopen(input_file, "rb");
 	fout = fopen(output_file, "wt");
-	if (!fin) {
-		perror("Unable to open input file");
-		exit(1);
-	}
 	if (!fout) {
 		perror("Unable to open output file");
 		exit(1);
 	}
     
-    start_qv_decompression(fout, input_file, qlist, &num_lines);
-    
-	// Close the files and we are done decoding
-	fclose(fin);
+    start_qv_decompression(fout, input_file, qlist);
+
 	fclose(fout);
-    
 	stop_timer(&timer);
-	printf("Decoded %d lines in %f seconds.\n", num_lines, get_timer_interval(&timer));
+	printf("Decoded %d lines in %f seconds.\n", qlist->lines, get_timer_interval(&timer));
     
 }
 
@@ -144,7 +121,7 @@ int main(int argc, char **argv) {
 		
 		// Attempted to run from command line but not all arguments are present
 		if (argc > 1) {
-			printf("Incorrect number of arguments supplied!");
+			printf("Incorrect number of arguments supplied!\n");
 			exit(1);
 		}
 		else {
@@ -168,7 +145,7 @@ int main(int argc, char **argv) {
     }
     else {
 		usage(argv[0]);
-		printf("Missing required -c or -d!");
+		printf("Missing required -c or -d!\n");
 		exit(1);
 	}
 

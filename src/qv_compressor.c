@@ -11,7 +11,6 @@
 
 
 uint32_t compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx){
-    
     // Send x to the arithmetic encoder
     arithmetic_encoder_step(as->a, as->stats[column][idx], x, as->os);
     
@@ -22,7 +21,6 @@ uint32_t compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx){
 }
 
 uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx){
-    
     uint32_t x;
     
     // Send x to the arithmetic encoder
@@ -33,8 +31,7 @@ uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx){
     return x;
 }
 
-uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list_t *qlist, uint32_t *num_lines, double *dis){
-    
+uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list_t *qlist, double *dis) {
     unsigned int osSize = 0;
     
     qv_compressor qvc;
@@ -43,12 +40,11 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
 	double distortion = 0.0;
 	uint32_t error = 0;
     uint8_t qv = 0, prev_qv = 0;
-	char *line;
-    
-    uint32_t columns;
+    uint32_t columns = qlist->columns;
     struct quantizer_t *q;
+
+	char *line = (char *) _alloca(columns+3);
     
-    line = (char *) calloc(4096, sizeof(char));
     
     ////// For debuging //////
     //FILE *fref = fopen("/tmp/fref.txt", "w");
@@ -58,12 +54,10 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
     qvc = initialize_qv_compressor(osPath, COMPRESSION, qlist);
     
     // Start compressing the file
-    columns = qlist->columns;
 	distortion = 0.0;
 	fgets(line, columns+2, fp);
-    
+
 	do {
-        
         if(lineCtr%1000000 == 0){
             printf("Line: %dM\n", lineCtr/1000000);
         }
@@ -120,34 +114,31 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
     
     osSize = encoder_last_step(qvc->Quals->a, qvc->Quals->os);
     
-    *num_lines = lineCtr;
+	qlist->lines = lineCtr;
     *dis = distortion / ((double) lineCtr);
     
     return osSize;
-    
 }
 
-uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_list_t *qlist, uint32_t *num_lines){
-    
+uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_list_t *qlist) {
     qv_compressor qvc;
     
 	uint32_t s = 0, idx = 0, lineCtr = 0, q_state = 0;
     uint8_t prev_qv = 0;
-	char *line;
     
-    uint32_t columns;
+    uint32_t columns = qlist->columns;
+	uint32_t lines = qlist->lines;
     struct quantizer_t *q;
-    
-    line = (char *) calloc(4096, sizeof(char));
+
+	char *line = (char *) _alloca(columns+2);
+    line[columns] = '\n';
+	line[columns+1] = '\0';
     
     // Initialize the compressor
     qvc = initialize_qv_compressor(isPath, DECOMPRESSION, qlist);
     
-    // Start decompressing the file
-    columns = qlist->columns;
-    line[columns] = '\n';
-    
-	while (lineCtr < *num_lines - 1) {
+	// Last line has to be handled separately to clear the arithmetic decoder
+	while (lineCtr < lines - 1) {
         
         if(lineCtr%1000000 == 0){
             printf("Line: %dM\n", lineCtr/1000000);
@@ -224,12 +215,8 @@ uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_l
     
     // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
     fwrite(line, columns+1, sizeof(uint8_t), fop);
-    
-    *num_lines = lineCtr;
+
+	qlist->lines = lineCtr;
     
     return 0;
-    
 }
-
-
-
