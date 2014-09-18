@@ -90,7 +90,7 @@ stream_stats** initialize_stream_stats(struct cond_quantizer_list_t *q_list);
 
 uint32_t update_stats(stream_stats stats, int32_t x, uint32_t m);
 
-uint32_t compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx);
+void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx);
 uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx);
 
 qv_compressor initialize_qv_compressor(char osPath[], uint8_t streamDirection, struct cond_quantizer_list_t *q_list);
