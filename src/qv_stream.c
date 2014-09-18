@@ -114,14 +114,17 @@ arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, stru
         // Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
         srand((uint32_t) time(0));
         for (i = 0; i < 32; ++i) {
+#ifndef DEBUG
             q_list->well.state[i] = rand();
-            // Testing with fixed state to look for consistency!
-            //qlist->well.state[s] = 0x55555555;
+#else
+            qlist->well.state[s] = 0x55555555;
+#endif
         }
         
         // Write the initial WELL state vector to the file first (fixed size of 32 bytes)
+		// @todo strictly this needs to be stored in network order because we're interpreting it as a 32 bit int
+		// but I am a bit too lazy for that right now
         fwrite(q_list->well.state, sizeof(uint32_t), 32, fp);
-        
 	}
 	
 	
