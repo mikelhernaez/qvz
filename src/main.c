@@ -9,16 +9,10 @@
 #include "codebook.h"
 #include "qv_compressor.h"
 
-// Default file names if none are provided on the command line, for testing in Visual Studio
-// @todo remove from final version
-char *default_input = "quality_lines.txt";
-char *default_output = "c_bitpacked_quality_lossy.txt";
-char *default_codebook = "codebook.txt";
-
 /**
  *
  */
-void encode(char *input_name, char *output_name, char *codebook_name, double comp) {
+void encode(char *input_name, char *output_name, char *codebook_name, struct qv_options_t *opts) {
 	// New variables, definitely used
 	struct distortion_t *dist = generate_distortion_matrix(41, DISTORTION_MSE);
 	struct alphabet_t *alphabet = alloc_alphabet(41);
@@ -29,8 +23,8 @@ void encode(char *input_name, char *output_name, char *codebook_name, double com
 	struct hrtimer_t stats, encoding, total;
 	FILE *fp;
 	uint64_t bytes_used;
-	double distortion = 0.0;
-    
+    double distortion;
+
 	start_timer(&total);
 	start_timer(&stats);
     
@@ -42,13 +36,15 @@ void encode(char *input_name, char *output_name, char *codebook_name, double com
 	}
     
 	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, comp, &distortion);
+	qlist = generate_codebooks(&training_file, training_stats, dist, opts);
     
 	stop_timer(&stats);
 	start_timer(&encoding);
     
-	printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
-	printf("Expected distortion: %f\n", distortion);
+	if (opts->verbose) {
+		printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
+		printf("Expected distortion: %f\n", opts->e_dist);
+	}
     
 	fp = fopen(input_name, "rt");
 	if (!fp) {
@@ -65,18 +61,25 @@ void encode(char *input_name, char *output_name, char *codebook_name, double com
 	stop_timer(&encoding);
 	stop_timer(&total);
     
-	// Summary stats from measurement
-	printf("Actual distortion: %f\n", distortion);
-	printf("Lines: %d\n", qlist->lines);
-	printf("Total bytes used: %llu\n", bytes_used);
-	printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
-	printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
+	// Verbose stats
+	if (opts->verbose) {
+		printf("Actual distortion: %f\n", distortion);
+		printf("Lines: %d\n", qlist->lines);
+		printf("Total bytes used: %llu\n", bytes_used);
+		printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
+		printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
+	}
+
+	// Parse-able stats
+	if (opts->stats) {
+		printf("rate, %.4f, distortion, %.4f, time, %.4f\n", (bytes_used*8.)/(qlist->lines*qlist->columns), distortion, get_timer_interval(&total));
+	}
 }
 
 /**
  *
  */
-void decode(char *input_file, char *output_file, char* codebook_file) {
+void decode(char *input_file, char *output_file, char* codebook_file, struct qv_options_t *opts) {
 	FILE *fout;
 	struct hrtimer_t timer;
 	struct cond_quantizer_list_t *qlist;
@@ -96,8 +99,10 @@ void decode(char *input_file, char *output_file, char* codebook_file) {
 
 	fclose(fout);
 	stop_timer(&timer);
-	printf("Decoded %d lines in %f seconds.\n", qlist->lines, get_timer_interval(&timer));
-    
+
+	if (opts->verbose) {
+		printf("Decoded %d lines in %f seconds.\n", qlist->lines, get_timer_interval(&timer));
+	}
 }
 
 /**
@@ -123,14 +128,15 @@ int main(int argc, char **argv) {
     char *input_name = 0;
 	char *output_name = 0;
 	char *codebook_name = 0;
+	struct qv_options_t opts;
 	uint32_t i;
 
 	uint8_t extract = 0;
-	uint8_t use_comp = 1;
 	uint8_t file_idx = 0;
-	uint8_t verbose = 0;
-	uint8_t stats = 0;
-	double rate = 0.5;
+
+	opts.verbose = 0;
+	opts.stats = 0;
+	opts.ratio = 0.5;
 
 	// No dependency, cross-platform command line parsing means no getopt
 	// So we need to settle for less than optimal flexibility (no combining short opts, maybe that will be added later)
@@ -172,26 +178,26 @@ int main(int argc, char **argv) {
 				break;
 			case 'f':
 				extract = 0;
-				use_comp = 1;
-				rate = atof(argv[i+1]);
+				opts.ratio = atof(argv[i+1]);
+				opts.mode = MODE_RATIO;
 				i += 2;
 				break;
 			case 'r':
 				extract = 0;
-				use_comp = 0;
-				rate = atof(argv[i+1]);
+				opts.ratio = atof(argv[i+1]);
+				opts.mode = MODE_FIXED;
 				i += 2;
 				printf("--Warning-- fixed rate encoding not yet implemented, falling back to ratio");
 				break;
 			case 'v':
-				verbose = 1;
+				opts.verbose = 1;
 				i += 1;
 				break;
 			case 'h':
 				usage(argv[0]);
 				exit(0);
 			case 's':
-				stats = 1;
+				opts.stats = 1;
 				i += 1;
 				break;
 			default:
@@ -207,24 +213,27 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	if (verbose) {
+	if (opts.verbose) {
 		if (extract) {
 			printf("%s will be decoded to %s.\n", input_name, output_name);
 		}
 		else {
 			printf("%s will be encoded as %s.\n", input_name, output_name);
-			if (use_comp)
-				printf("Ratio mode selected, targeting %f compression ratio\n", rate);
-			else
-				printf("Fixed-rate mode selected, targeting %f bits per symbol\n", rate);
+			if (opts.mode == MODE_RATIO)
+				printf("Ratio mode selected, targeting %f compression ratio\n", opts.ratio);
+			else if (opts.mode == MODE_FIXED)
+				printf("Fixed-rate mode selected, targeting %f bits per symbol\n", opts.ratio);
+			else if (opts.mode == MODE_FIXED_MSE)
+				printf("Fixed-MSE mode selected, targeting %f average MSE per context\n", opts.ratio);
+			// @todo other modes?
 		}
 	}
 
 	if (extract) {
-		decode(input_name, output_name, codebook_name);
+		decode(input_name, output_name, codebook_name, &opts);
 	}
 	else {
-		encode(input_name, output_name, codebook_name, rate);
+		encode(input_name, output_name, codebook_name, &opts);
 	}
 
 #ifndef LINUX

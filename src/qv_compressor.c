@@ -53,7 +53,7 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
 	fgets(line, columns+2, fp);
 
 	do {
-        if(lineCtr%1000000 == 0){
+        if(qlist->options->verbose && lineCtr%1000000 == 0){
             printf("Line: %dM\n", lineCtr/1000000);
         }
         lineCtr++;
@@ -126,7 +126,7 @@ uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_l
     
 	// Last line has to be handled separately to clear the arithmetic decoder
 	while (lineCtr < lines - 1) {
-        if(lineCtr%1000000 == 0){
+        if (qlist->options->verbose && lineCtr%1000000 == 0){
             printf("Line: %dM\n", lineCtr/1000000);
         }
         lineCtr++;
@@ -161,7 +161,7 @@ uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_l
 	}
     
     // Last Line
-    if(lineCtr%1000000 == 0){
+    if(qlist->options->verbose && lineCtr%1000000 == 0){
         printf("Line: %dM\n", lineCtr/1000000);
     }
     lineCtr++;

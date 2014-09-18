@@ -240,7 +240,7 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
  * @param hi Place to store the pointer to the high quantizer
  * @return double The ratio necessary to combine these two quantizers to achieve the target
  */
-double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi) {
+double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi, uint8_t verbose) {
 	struct quantizer_t *q_temp;
 	double lo_entropy, hi_entropy;
 	struct pmf_t *pmf_temp = alloc_pmf(pmf->alphabet);
@@ -262,8 +262,10 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 		*hi = q_temp;
 	} while (hi_entropy < target && states < pmf->alphabet->size);
 
-	printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
-	printf("Expected distortion: Low: %f, High: %f.\n", (*lo)->mse, (*hi)->mse);
+	if (verbose) {
+		printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
+		printf("Expected distortion: Low: %f, High: %f.\n", (*lo)->mse, (*hi)->mse);
+	}
 
 	// Assign ratio based on how we did against our entropy target
 	if (hi_entropy < target)
@@ -275,7 +277,7 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 }
 
 /**
- * ???
+ * 
  */
 void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, struct pmf_list_t *q_x_pmf, double ratio, struct alphabet_t *q_output_union) {
     symbol_t x;
@@ -365,7 +367,7 @@ void compute_xpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
  * Given the statistics calculated before, we need to compute the entire codebook's worth of
  * quantizers, as well as all of the PMFs and related stats
  */
-struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, double comp, double *expected_distortion) {
+struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, struct qv_options_t *opts) {
 	// Stuff for state allocation and mixing
 	double ratio;
     
@@ -400,13 +402,14 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
     // For the column 0 the quantizers aren't conditional, so find them directly
     q_output_union = alloc_alphabet(1);
     cond_quantizer_init_column(q_list, 0, q_output_union);
+	q_list->options = opts;
     
     // Initialize the new pmfs (dummy)
     qpmf_list = alloc_pmf_list(A->size, q_output_union);
     xpmf_list = alloc_pmf_list(q_output_union->size, A);
     
     // Handle column zero specially
-	ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*comp, &q_lo, &q_hi);
+	ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*opts->ratio, &q_lo, &q_hi, opts->verbose);
 	q_lo->ratio = ratio;
 	q_hi->ratio = 1-ratio;
 	total_mse = ratio*q_lo->mse + (1-ratio)*q_hi->mse;
@@ -443,7 +446,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
         // for each previous value Q_i compute the quantizers
         for (j = 0; j < q_output_union->size; ++j) {
             // Find and save quantizers
-			ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*comp, &q_lo, &q_hi);
+			ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*opts->ratio, &q_lo, &q_hi, opts->verbose);
 			q_lo->ratio = ratio;
 			q_hi->ratio = 1-ratio;
             store_cond_quantizers_indexed(q_lo, q_hi, ratio, q_list, column, j);
@@ -468,8 +471,7 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	free_pmf_list(qpmf_list);
     free(q_output_union);
     
-	if (expected_distortion)
-		*expected_distortion = total_mse / in_pmfs->columns;
+	opts->e_dist = total_mse / in_pmfs->columns;
 
 	return q_list;
 }
