@@ -9,11 +9,11 @@ CLUSTER_OBJ=$(CLUSTER_SRC:.c=.o)
 CC=gcc
 RM=rm -f
 
-CLFAGS=-O3 -Wall -fomit-frame-pointer -I../include -DLINUX
+CFLAGS=-O3 -Wall -I../include -DLINUX
 LDFLAGS=-lc -lm -lrt
 
 %.o : %.c
-	$(CC) $(CLFAGS) -c $<
+	$(CC) $(CFLAGS) -c $<
 
 all : qvz
 
@@ -22,6 +22,9 @@ cluster : $(CLUSTER_OBJ)
 
 qvz : $(OBJ)
 	$(CC) $(LDFLAGS) $(OBJ) -o qvz
+
+debug : CFLAGS += -DDEBUG -ggdb
+debug : qvz
 
 clean :
 	$(RM) *.o qvz
