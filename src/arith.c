@@ -69,12 +69,14 @@ uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t 
         
         // If E1 or E2 holds rescale and recheck E1 and E2
         if (E1_E2) {
-            send_bit_to_os(msbL, os);
+            //send_bit_to_os(msbL, os);
+			stream_write_bit(os, msbL);
             a->l <<= 1, a->l ^= msbL << a->m;
             a->u <<= 1, a->u ^= msbL << a->m, a->u++;
             
             while (a->scale3 > 0) {
-                send_bit_to_os(!msbL, os);
+                //send_bit_to_os(!msbL, os);
+				stream_write_bit(os, !msbL);
                 a->scale3--;
             }
             
@@ -114,29 +116,27 @@ uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t 
     return osSize;
 }
 
-int encoder_last_step(Arithmetic_code a, osStream os){
-    
-    uint8_t msbL = 0;
-    uint32_t osSize;
-    
-    msbL = a->l >> (a->m - 1);
+int encoder_last_step(Arithmetic_code a, osStream os) {
+    uint8_t msbL = a->l >> (a->m - 1);
     
     // Write the msb of the tag (l)
-    send_bit_to_os(msbL, os);
+    //send_bit_to_os(msbL, os);
+	stream_write_bit(os, msbL);
     
     // write as many !msbL as scale3 left
     while (a->scale3 > 0) {
-        send_bit_to_os(!msbL, os);
+        //send_bit_to_os(!msbL, os);
+		stream_write_bit(os, !msbL);
         a->scale3--;
     }
     
     // write the rest of the tag (l)
-    osSize = send_uint32_to_os(a->l, a->m - 1, os);
+    //osSize = send_uint32_to_os(a->l, a->m - 1, os);
+	stream_write_bits(os, a->l, a->m - 1);
+	stream_finish_byte(os);
+    fclose(os->fp);
     
-    fclose(os->fos);
-    
-    return osSize;
-    
+    return os->written;
 }
 
 uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats stats, osStream is){
@@ -184,13 +184,13 @@ uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats stats, osStream
     
     // While any of E conditions hold
     while (E1_E2 || E3) {
-        
         // If E1 or E2 holds rescale and recheck E1, E2 and E3
         if (E1_E2) {
             a->l <<= 1, a->l ^= msbL << a->m;
             a->u <<= 1, a->u ^= msbL << a->m, a->u++;
             
-            a->t <<= 1, a->t^=msbT << a->m, a->t += read_bit_from_stream(is);
+            //a->t <<= 1, a->t^=msbT << a->m, a->t += read_bit_from_stream(is);
+            a->t <<= 1, a->t^=msbT << a->m, a->t += stream_read_bit(is);
             
             msbL = a->l >> (a->m - 1);
             msbU = a->u >> (a->m - 1);
@@ -212,7 +212,8 @@ uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats stats, osStream
             a->l <<= 1, a->l ^= msbL << a->m;
             a->u <<= 1, a->u ^= msbU << a->m, a->u++;
             
-            a->t <<= 1, a->t^=msbT << a->m, a->t += read_bit_from_stream(is);
+            //a->t <<= 1, a->t^=msbT << a->m, a->t += read_bit_from_stream(is);
+            a->t <<= 1, a->t^=msbT << a->m, a->t += stream_read_bit(is);
             
             a->u ^= (1 << (a->m - 1));
             a->l ^= (1 << (a->m - 1));
@@ -238,8 +239,7 @@ uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats stats, osStream
     
 }
 
-uint32_t decoder_last_step(Arithmetic_code a, stream_stats stats){
-    
+uint32_t decoder_last_step(Arithmetic_code a, stream_stats stats) {
     uint64_t range, tagGap, subRange;
     uint32_t k = 0, cumCount = 0, x;
     
@@ -254,6 +254,5 @@ uint32_t decoder_last_step(Arithmetic_code a, stream_stats stats){
     x = --k;
     
     return x;
-    
 }
 

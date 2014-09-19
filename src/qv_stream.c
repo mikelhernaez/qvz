@@ -94,23 +94,18 @@ stream_stats** initialize_stream_stats(struct cond_quantizer_list_t *q_list){
     
 }
 
-
-arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, struct cond_quantizer_list_t *q_list){
-    
+arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, struct cond_quantizer_list_t *q_list) {
     arithStream as;
     FILE *fp;
 	uint32_t i;
-    
-    fp = (decompressor_flag)? fopen(osPath, "r"):fopen(osPath, "w");
-    
+
     if (decompressor_flag) {
-        
-        // First, read in the WELL state and set up the PRNG
+		fp = fopen(osPath, "rb");
         fread(q_list->well.state, sizeof(uint32_t), 32, fp);
     }
-    
     else {
-    
+		fp = fopen(osPath, "wb");
+
         // Initialize WELL state vector with libc rand (this initial vector needs to be copied to the decoder)
         srand((uint32_t) time(0));
         for (i = 0; i < 32; ++i) {
@@ -126,27 +121,24 @@ arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, stru
 		// but I am a bit too lazy for that right now
         fwrite(q_list->well.state, sizeof(uint32_t), 32, fp);
 	}
-	
-	
     
     as = (arithStream) calloc(1, sizeof(struct arithStream_t));
     as->stats = initialize_stream_stats(q_list);
     as->a = initialize_arithmetic_encoder(m_arith);
-    as->os = initialize_osStream(1, fp, NULL, decompressor_flag);
-    as->a->t = (decompressor_flag)? read_uint32_from_stream(as->a->m, as->os):0;
+    //as->os = initialize_osStream(1, fp, NULL, decompressor_flag);
+	as->os = alloc_os_stream(fp, decompressor_flag);
+
+	if (decompressor_flag)
+		as->a->t = 0; //stream_read_bits(as->os, as->a->m);
+	else
+		as->a->t = 0;
     
     return as;
-    
 }
 
-qv_compressor initialize_qv_compressor(char osPath[], uint8_t streamDirection, struct cond_quantizer_list_t *q_list){
-    
+qv_compressor initialize_qv_compressor(char *osPath, uint8_t streamDirection, struct cond_quantizer_list_t *q_list) {
     qv_compressor s;
-    
     s = calloc(1, sizeof(struct qv_compressor_t));
-    
     s->Quals = initialize_arithStream(osPath, streamDirection, q_list);
-    
-    
     return s;
 }

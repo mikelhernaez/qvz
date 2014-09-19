@@ -27,6 +27,7 @@
 
 #define m_arith  22
 
+#define OS_STREAM_BUF_LEN		4096
 
 #define COMPRESSION 0
 #define DECOMPRESSION 1
@@ -40,16 +41,13 @@ typedef struct Arithmetic_code_t{
     uint32_t t;
 }*Arithmetic_code;
 
-typedef struct osStream_t{
-    
-    uint8_t bufferByte;
-    int8_t bitPos;
-    FILE *fos;
-    uint32_t osLength;
-    uint8_t *osBuffer;
-    uint32_t osbufferSize;
-    
-}*osStream;
+typedef struct os_stream_t {
+	FILE *fp;
+	uint8_t *buf;
+	uint32_t bufPos;
+	uint8_t bitPos;
+	uint64_t written;
+} *osStream;
 
 typedef struct stream_stats_t{
     
@@ -73,13 +71,17 @@ typedef struct qv_compressor_t{
 
 
 
+// Stream interface
+struct os_stream_t *alloc_os_stream(FILE *fp, uint8_t in);
+void free_os_stream(struct os_stream_t *);
+uint8_t stream_read_bit(struct os_stream_t *);
+uint32_t stream_read_bits(struct os_stream_t *os, uint8_t len);
+void stream_write_bit(struct os_stream_t *, uint8_t);
+void stream_write_bits(struct os_stream_t *os, uint32_t dw, uint8_t len);
+void stream_finish_byte(struct os_stream_t *);
+void stream_write_buffer(struct os_stream_t *);
 
-uint8_t read_bit_from_stream(osStream is);
-uint32_t read_uint32_from_stream(uint32_t numBits, osStream is);
-uint32_t send_bit_to_os(uint8_t bit, osStream os);
-uint32_t send_uint32_to_os(uint32_t num, uint8_t numBits, osStream os);
-osStream initialize_osStream(uint32_t osBuffer, FILE *fos, FILE *fosA, uint8_t inStream);
-
+// Arithmetic ncoder interface
 Arithmetic_code initialize_arithmetic_encoder(uint32_t m);
 uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t x, osStream os);
 int encoder_last_step(Arithmetic_code a, osStream os);
