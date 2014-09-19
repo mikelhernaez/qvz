@@ -245,15 +245,26 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 	double lo_entropy, hi_entropy;
 	struct pmf_t *pmf_temp = alloc_pmf(pmf->alphabet);
 	uint32_t states = 1;
+
+	if (target == 0.0) {
+		*lo = generate_quantizer(pmf, dist, 1);
+		*hi = generate_quantizer(pmf, dist, 1);
+		
+		if (verbose) {
+			printf("Optimization targeted zero entropy, 1 state quantizers produced automatically.\n");
+		}
+
+		free_pmf(pmf_temp);
+		return 1.0;
+	}
 	
 	q_temp = generate_quantizer(pmf, dist, states);
 	hi_entropy = get_entropy(apply_quantizer(q_temp, pmf, pmf_temp));
 	*hi = q_temp;
-	*lo = 0;
+	*lo = alloc_quantizer(pmf->alphabet);
 
 	do {
-		if (*lo)
-			free_quantizer(*lo);
+		free_quantizer(*lo);
 		*lo = *hi;
 		lo_entropy = hi_entropy;
 		
@@ -262,6 +273,8 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 		hi_entropy = get_entropy(apply_quantizer(q_temp, pmf, pmf_temp));
 		*hi = q_temp;
 	} while (hi_entropy < target && states < pmf->alphabet->size);
+
+	free_pmf(pmf_temp);
 
 	if (verbose) {
 		printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
