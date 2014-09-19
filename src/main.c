@@ -29,7 +29,7 @@ void encode(char *input_name, char *output_name, char *codebook_name, struct qv_
 	start_timer(&stats);
     
 	// Load file statistics and find statistics for the training data
-	status = load_file(input_name, &training_file, 1000000);
+	status = load_file(input_name, &training_file, opts->training_size);
 	if (status != LF_ERROR_NONE) {
 		printf("load_file returned error: %d\n", status);
 		exit(1);
@@ -113,13 +113,14 @@ void decode(char *input_file, char *output_file, char* codebook_file, struct qv_
 void usage(char *name) {
 	printf("Usage: %s (options) [codebook file] [input file] [output file]\n", name);
 	printf("Options are:\n");
-	printf("\t-x\t\t: Extract quality values from compressed file\n");
 	printf("\t-c\t\t: Store quality values in compressed file (default)\n");
+	printf("\t-x\t\t: Extract quality values from compressed file\n");
 	printf("\t-f [ratio]\t: Compress using [ratio] bits per bit of input entropy per symbol\n");
 	printf("\t-r [rate]\t: Compress using fixed [rate] bits per symbol\n");
-	printf("\t-v\t\t: Enable verbose output\n");
-	printf("\t-s\t\t: Print summary stats\n");
 	printf("\t-h\t\t: Print this help\n");
+	printf("\t-s\t\t: Print summary stats\n");
+	printf("\t-t [lines]\t: Number of lines to use as training set (0 for all, 1000000 default)\n");
+	printf("\t-v\t\t: Enable verbose output\n");
 }
 
 /**
@@ -135,6 +136,7 @@ int main(int argc, char **argv) {
 	uint8_t extract = 0;
 	uint8_t file_idx = 0;
 
+	opts.training_size = 1000000;
 	opts.verbose = 0;
 	opts.stats = 0;
 	opts.ratio = 0.5;
@@ -200,6 +202,10 @@ int main(int argc, char **argv) {
 			case 's':
 				opts.stats = 1;
 				i += 1;
+				break;
+			case 't':
+				opts.training_size = atoi(argv[i+1]);
+				i += 2;
 				break;
 			default:
 				printf("Unrecognized option -%c.\n", argv[i][1]);

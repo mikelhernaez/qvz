@@ -27,6 +27,7 @@ struct qv_options_t {
 	uint8_t verbose;
 	uint8_t stats;
 	uint8_t mode;
+	uint32_t training_size;
 	double ratio;		// Used for parameter to all modes
 	double e_dist;		// Expected distortion as calculated during optimization
 };
