@@ -129,7 +129,7 @@ arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, stru
 	as->os = alloc_os_stream(fp, decompressor_flag);
 
 	if (decompressor_flag)
-		as->a->t = 0; //stream_read_bits(as->os, as->a->m);
+		as->a->t = stream_read_bits(as->os, as->a->m);
 	else
 		as->a->t = 0;
     

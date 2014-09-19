@@ -53,12 +53,14 @@ printf("Read bit %d\n", rtn);
 
 /**
  * Reads a grouping of bits to be interpreted as a single integer, regardless of length
+ * Bits are implicitly written in bit endian order ONE AT A TIME elsewhere in the code,
+ * so this must read that way too
  */
 uint32_t stream_read_bits(struct os_stream_t *os, uint8_t len) {
 	uint32_t rtn = 0;
-	uint8_t bit;
+	int8_t bit;
 
-	for (bit = 0; bit < len; ++bit) {
+	for (bit = len-1; bit >= 0; --bit) {
 		rtn |= stream_read_bit(os) << bit;
 	}
 
@@ -69,7 +71,7 @@ uint32_t stream_read_bits(struct os_stream_t *os, uint8_t len) {
  * Writes a single bit to the stream
  */
 void stream_write_bit(struct os_stream_t *os, uint8_t bit) {
-	printf("write bit %d\n", bit);
+	printf("write bit %d\n", bit&1);
 	bit = (bit & 1) << os->bitPos;
 	os->buf[os->bufPos] |= bit;
 
@@ -86,14 +88,13 @@ void stream_write_bit(struct os_stream_t *os, uint8_t bit) {
 
 /**
  * Writes a grouping of bits to be interpreted as a single integer and read back the
- * same way
+ * same way. Bits need to be written msb first
  */
 void stream_write_bits(struct os_stream_t *os, uint32_t dw, uint8_t len) {
-	uint8_t bit;
+	int8_t bit;
 
-	for (bit = 0; bit < len; ++bit) {
-		stream_write_bit(os, (uint8_t)dw);
-		dw = dw >> 1;
+	for (bit = len-1; bit >= 0; --bit) {
+		stream_write_bit(os, (uint8_t)(dw >> bit));
 	}
 }
 
