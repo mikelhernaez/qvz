@@ -593,7 +593,7 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 
 	// Next line is qratio for zero quantizer offset by 33
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-	ratio = (line[0]-33) / 100.0;
+	ratio = (line[0] - 33) / 128.;
 
 	// Allocate some quantizers and copy the tables from lines 3 and 4
 	q_lo = alloc_quantizer(A);

@@ -187,6 +187,7 @@ void find_output_alphabet(struct quantizer_t *q) {
 	// Make it into a proper alphabet
 	q->output_alphabet = alloc_alphabet(size);
 	memcpy(q->output_alphabet->symbols, uniques, size*sizeof(symbol_t));
+	alphabet_compute_index(q->output_alphabet);
 }
 
 /**

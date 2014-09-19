@@ -292,7 +292,7 @@ void clear_pmf_list(struct pmf_list_t *list) {
  * Determines if the given alphabet contains the given symbol
  */
 uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol) {
-	return alphabet->indexes[symbol] == ALPHABET_SYMBOL_NOT_FOUND ? 1 : 0;
+	return alphabet->indexes[symbol] != ALPHABET_SYMBOL_NOT_FOUND ? 1 : 0;
 }
 
 /**

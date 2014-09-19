@@ -68,7 +68,7 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
         compress_qv(qvc->Quals, q_state, 0, idx);
         
 #ifdef DEBUG
-        fprintf(fref, "%d ", q_state);
+		fputc(qv+33, fref);
 #endif
         
 		error = (line[0] - qv - 33)*(line[0] -qv - 33);
@@ -81,7 +81,7 @@ uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list
             q_state = get_symbol_index(q->output_alphabet, qv);
             
 #ifdef DEBUG
-            fprintf(fref, "%d ", q_state);
+			fputc(qv+33, fref);
 #endif
             
             compress_qv(qvc->Quals, q_state, s, idx);
