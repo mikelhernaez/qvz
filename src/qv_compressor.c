@@ -1,11 +1,3 @@
-//
-//  fasta_compressor.c
-//  iDoComp_v1
-//
-//  Created by Mikel Hernaez on 8/7/14.
-//  Copyright (c) 2014 Mikel Hernaez. All rights reserved.
-//
-
 #include "qv_compressor.h"
 
 void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx){
