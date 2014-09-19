@@ -117,7 +117,7 @@ arithStream initialize_arithStream(char* osPath, uint8_t decompressor_flag, stru
 #ifndef DEBUG
             q_list->well.state[i] = rand();
 #else
-            qlist->well.state[s] = 0x55555555;
+            q_list->well.state[i] = 0x55555555;
 #endif
         }
         

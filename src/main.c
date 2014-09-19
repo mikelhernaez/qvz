@@ -88,6 +88,7 @@ void decode(char *input_file, char *output_file, char* codebook_file, struct qv_
 	start_timer(&timer);
     
 	qlist = read_codebook(codebook_file, A);
+	qlist->options = opts;
     
 	fout = fopen(output_file, "wt");
 	if (!fout) {

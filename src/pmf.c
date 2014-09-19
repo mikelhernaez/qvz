@@ -16,6 +16,8 @@ struct alphabet_t *alloc_alphabet(uint32_t size) {
 	for (i = 0; i < size; ++i) {
 		rtn->symbols[i] = i;
 	}
+	alphabet_compute_index(rtn);
+
 	return rtn;
 }
 
@@ -26,52 +28,11 @@ struct alphabet_t *duplicate_alphabet(const struct alphabet_t *a) {
 	struct alphabet_t *rtn = (struct alphabet_t *) calloc(1, sizeof(struct alphabet_t));
 	rtn->size = a->size;
 	rtn->symbols = (symbol_t *) calloc(a->size, sizeof(symbol_t));
-	memcpy(rtn->symbols, a->symbols, a->size*sizeof(symbol_t));
-	return rtn;
-}
 
-/**
- * Merge two alphabets mantaining the order
- */
-struct alphabet_t* merge_alphabets(struct alphabet_t *a_lo, struct alphabet_t *a_hi){
-    
-    uint32_t idx, small_input_alphabet_size, large_input_alphabet_size, max_output_alphabet_size;
-    
-    struct alphabet_t *rtn = (struct alphabet_t *) calloc(1, sizeof(struct alphabet_t));
-    
-    small_input_alphabet_size = (a_lo->size < a_hi->size)? a_lo->size:a_hi->size;
-    large_input_alphabet_size = (a_lo->size < a_hi->size)? a_hi->size:a_lo->size;
-    
-    max_output_alphabet_size = 2*small_input_alphabet_size + (large_input_alphabet_size - small_input_alphabet_size);
-    
-	rtn->symbols = (symbol_t *) calloc( max_output_alphabet_size, sizeof(symbol_t));
-    
-    for (idx = 0; idx < small_input_alphabet_size; idx++) {
-            
-        if (a_lo->symbols[idx] < a_hi->symbols[idx]){
-                
-            rtn->symbols[rtn->size++] = a_lo->symbols[idx];
-            rtn->symbols[rtn->size++] = a_hi->symbols[idx];
-        }
-        
-        else if (a_lo->symbols[idx] == a_hi->symbols[idx]){
-            
-            rtn->symbols[rtn->size++] = a_lo->symbols[idx];
-        }
-        else{
-            rtn->symbols[rtn->size++] = a_hi->symbols[idx];
-            rtn->symbols[rtn->size++] = a_lo->symbols[idx];
-        }
-    }
-    for (idx = small_input_alphabet_size; idx < large_input_alphabet_size; idx++)
-    {
-        rtn->symbols[rtn->size++] = (a_lo->size > a_hi->size)? a_lo->symbols[idx]:a_hi->symbols[idx];
-        
-    }
-    
-    return rtn;
-    
-    
+	memcpy(rtn->symbols, a->symbols, a->size*sizeof(symbol_t));
+	alphabet_compute_index(rtn);
+
+	return rtn;
 }
 
 /**
@@ -331,12 +292,7 @@ void clear_pmf_list(struct pmf_list_t *list) {
  * Determines if the given alphabet contains the given symbol
  */
 uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol) {
-	uint32_t idx;
-	for (idx = 0; idx < alphabet->size; ++idx) {
-		if (alphabet->symbols[idx] == symbol)
-			return 1;
-	}
-	return 0;
+	return alphabet->indexes[symbol] == ALPHABET_SYMBOL_NOT_FOUND ? 1 : 0;
 }
 
 /**
@@ -344,12 +300,7 @@ uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol) {
  * if the alphabet doesn't start at zero, has gaps, etc.
  */
 uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol) {
-	uint32_t idx;
-	for (idx = 0; idx < alphabet->size; ++idx) {
-		if (alphabet->symbols[idx] == symbol)
-			return idx;
-	}
-	return ALPHABET_SYMBOL_NOT_FOUND;
+	return alphabet->indexes[symbol];
 }
 
 /**
@@ -380,12 +331,12 @@ void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t
 		k += 1;
 	}
 
+	// Tail of the merge
 	while (i < a->size) {
 		sym[k] = a->symbols[i];
 		k += 1;
 		i += 1;
 	}
-
 	while (j < b->size) {
 		sym[k] = b->symbols[j];
 		k += 1;
@@ -400,6 +351,32 @@ void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t
 	// Copy over temporary data
 	memcpy(result->symbols, sym, k*sizeof(symbol_t));
 	result->size = k;
+	alphabet_compute_index(result);
+}
+
+/**
+ * Computes the index table (reverse mapping of symbols in the alphabet)
+ * that is used to speed up searches for symbols). This isn't a proper
+ * hash table and it will consume exponential memory if symbol_t changes
+ * size, so be careful
+ */
+void alphabet_compute_index(struct alphabet_t *A) {
+	uint32_t i;
+
+	if (A->indexes)
+		free(A->indexes);
+	
+	// Cheating but whatever
+	A->indexes = (uint32_t *) calloc(ALPHABET_INDEX_SIZE_HINT, sizeof(uint32_t));
+
+	// Fill gaps in the table with an appropriate index so we can use this for search too
+	for (i = 0; i < ALPHABET_INDEX_SIZE_HINT; ++i) {
+		A->indexes[i] = ALPHABET_SYMBOL_NOT_FOUND;
+	}
+
+	for (i = 0; i < A->size; ++i) {
+		A->indexes[A->symbols[i]] = i;
+	}
 }
 
 /**

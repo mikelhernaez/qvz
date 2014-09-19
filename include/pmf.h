@@ -8,6 +8,8 @@
 // Used to indicate a symbol not found during index lookup
 #define ALPHABET_SYMBOL_NOT_FOUND			UINT32_MAX
 
+#define ALPHABET_INDEX_SIZE_HINT			41
+
 // Unfortunately this is a bit brittle so don't change it
 typedef uint8_t symbol_t;
 
@@ -18,6 +20,7 @@ typedef uint8_t symbol_t;
 struct alphabet_t {
 	uint32_t size;
 	symbol_t *symbols;
+	uint32_t *indexes;
 };
 
 /**
@@ -68,12 +71,12 @@ void clear_pmf(struct pmf_t *);
 void clear_pmf_list(struct pmf_list_t *);
 
 // Alphabet search
+void alphabet_compute_index(struct alphabet_t *);
 uint32_t alphabet_contains(const struct alphabet_t *alphabet, symbol_t symbol);
 uint32_t get_symbol_index(const struct alphabet_t *alphabet, symbol_t symbol);
 
 // Compute the union of two alphabets
 void alphabet_union(const struct alphabet_t *restrict a, const struct alphabet_t *restrict b, struct alphabet_t *result);
-struct alphabet_t* merge_alphabets(struct alphabet_t *a_lo, struct alphabet_t *a_hi);
 
 // Display routines
 void print_alphabet(const struct alphabet_t *);
