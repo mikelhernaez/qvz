@@ -47,7 +47,7 @@ uint8_t stream_read_bit(struct os_stream_t *os) {
 		}
 	}
 
-printf("Read bit %d\n", rtn);
+printf("read %d\n", rtn);
 	return rtn;
 }
 
@@ -64,6 +64,7 @@ uint32_t stream_read_bits(struct os_stream_t *os, uint8_t len) {
 		rtn |= stream_read_bit(os) << bit;
 	}
 
+printf("read bits %x\n", rtn);
 	return rtn;
 }
 
@@ -71,7 +72,7 @@ uint32_t stream_read_bits(struct os_stream_t *os, uint8_t len) {
  * Writes a single bit to the stream
  */
 void stream_write_bit(struct os_stream_t *os, uint8_t bit) {
-	printf("write bit %d\n", bit&1);
+	printf("write %d\n", bit&1);
 	bit = (bit & 1) << os->bitPos;
 	os->buf[os->bufPos] |= bit;
 
