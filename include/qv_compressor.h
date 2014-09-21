@@ -34,7 +34,7 @@
 
 typedef struct Arithmetic_code_t {
     
-    uint32_t scale3;
+    int32_t scale3;
     
 	uint32_t l;
     uint32_t u;

@@ -75,7 +75,7 @@ void arithmetic_encoder_step(Arithmetic_code a, stream_stats_ptr_t stats, int32_
 			// Write any extra bits based on the number of rescalings without an output before now
             while (a->scale3 > 0) {
 				stream_write_bit(os, !msbL);
-                a->scale3--;
+                a->scale3 -= 1;
             }
             
             msbL = a->l >> msb_shift;
@@ -92,9 +92,9 @@ void arithmetic_encoder_step(Arithmetic_code a, stream_stats_ptr_t stats, int32_
         
         // if condition E3 holds, increment scale3 and rescale.
         if (E3) {
-            a->scale3++;
-            a->u <<= 1, a->u ^= (1 << a->m) ^ (1 << (a->m - 1)), a->u++;
-            a->l <<= 1, a->l ^= (1 << (a->m - 1));
+            a->scale3 += 1;
+			a->u = (((a->u << 1) & msb_clear_mask) | (1 << msb_shift)) + 1;
+			a->l = (a->l << 1) & msb_clear_mask;
             
             msbL = a->l >> msb_shift;
             msbU = a->u >> msb_shift;
