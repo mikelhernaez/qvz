@@ -64,8 +64,7 @@ void arithmetic_encoder_step(Arithmetic_code a, stream_stats_ptr_t stats, int32_
 	// While the bounds need rescaling
     while (E1_E2 || E3) {
         if (E1_E2) {
-			// We are in one half of the integer range so the next bit is fixed
-			// as the msb
+			// We are in one half of the integer range so the next bit is fixed as the MSB
 			stream_write_bit(os, msbL);
 
 			// Clear the msb from both bounds and rescale them
@@ -77,35 +76,22 @@ void arithmetic_encoder_step(Arithmetic_code a, stream_stats_ptr_t stats, int32_
 				stream_write_bit(os, !msbL);
                 a->scale3 -= 1;
             }
-            
-            msbL = a->l >> msb_shift;
-            msbU = a->u >> msb_shift;
-            E1_E2 = (msbL == msbU);
-			E3 = 0;
-            
-            if (!E1_E2) {
-				smsbL = a->l >> smsb_shift;
-				smsbU = a->u >> smsb_shift;
-				E3 = (smsbL == 0x01 && smsbU == 0x02);
-            }
         }
-        
-        // if condition E3 holds, increment scale3 and rescale.
-        if (E3) {
+		else { // E3 is true
             a->scale3 += 1;
 			a->u = (((a->u << 1) & msb_clear_mask) | (1 << msb_shift)) + 1;
 			a->l = (a->l << 1) & msb_clear_mask;
-            
-            msbL = a->l >> msb_shift;
-            msbU = a->u >> msb_shift;
-            E1_E2 = (msbL == msbU);
-			E3 = 0;
-            
-            if (!E1_E2) {
-				smsbL = a->l >> smsb_shift;
-				smsbU = a->u >> smsb_shift;
-				E3 = (smsbL == 0x01 && smsbU == 0x02);
-            }
+        }
+
+        msbL = a->l >> msb_shift;
+        msbU = a->u >> msb_shift;
+        E1_E2 = (msbL == msbU);
+		E3 = 0;
+
+        if (!E1_E2) {
+			smsbL = a->l >> smsb_shift;
+			smsbU = a->u >> smsb_shift;
+			E3 = (smsbL == 0x01 && smsbU == 0x02);
         }
     }
 }
@@ -119,7 +105,7 @@ int encoder_last_step(Arithmetic_code a, osStream os) {
     // write as many !msbL as scale3 left
     while (a->scale3 > 0) {
 		stream_write_bit(os, !msbL);
-        a->scale3--;
+        a->scale3 -= 1;
     }
     
     // write the rest of the tag (l)
@@ -132,19 +118,23 @@ int encoder_last_step(Arithmetic_code a, osStream os) {
 
 uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats_ptr_t stats, osStream is) {
     uint64_t range = 0, tagGap = 0;
-    int32_t k = -1, x = -1, i;
+    int32_t k = 0, x = -1, i;
     uint32_t subRange = 0, cumCountX = 0, cumCountX_1 = 0, cumCount = 0;
     
     uint8_t msbU = 0, msbL = 0, msbT = 0, E1_E2 = 0, E3 = 0, smsbL = 0, smsbU = 0;
     
+	// Again, these are actually constants
+	uint32_t msb_shift = a->m - 1;
+	uint32_t smsb_shift = a->m - 2;
+	uint32_t msb_clear_mask = (1 << msb_shift) - 1;
+
     range = a->u - a->l + 1;
     tagGap = a->t - a->l + 1;
     
-    subRange = (uint32_t)( (tagGap * stats->n - 1) / range );
-    
+	// @todo figure this out
+    subRange = (uint32_t)((tagGap * stats->n - 1) / range);
     while (subRange >= cumCount)
         cumCount += stats->counts[k++];
-    
     x = --k;
   
 	cumCountX_1 = 0;
@@ -157,70 +147,41 @@ uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats_ptr_t stats, os
     a->l = a->l + (uint32_t)((range * cumCountX_1) / stats->n);
     
     // Check the rescaling conditions.
-    msbL = a->l >> (a->m - 1);
-    msbU = a->u >> (a->m - 1);
-    msbT = a->t >> (a->m - 1);
+    msbL = a->l >> msb_shift;
+    msbU = a->u >> msb_shift;
     
     E1_E2 = (msbL == msbU);
+	E3 = 0;
     
     // If E1 or E2 doen't hold, check E3
     if (!E1_E2) {
-        smsbL = a->l >> (a->m - 2);
-        smsbU = (a->u >> (a->m - 2)) ^ 2;
-        E3 = (smsbL == 1 && smsbU == 0);
+		smsbL = a->l >> smsb_shift;
+		smsbU = a->u >> smsb_shift;
+		E3 = (smsbL == 0x01 && smsbU == 0x02);
     }
-    else E3 = 0;
     
     // While any of E conditions hold
     while (E1_E2 || E3) {
-        // If E1 or E2 holds rescale and recheck E1, E2 and E3
         if (E1_E2) {
-            a->l <<= 1, a->l ^= msbL << a->m;
-            a->u <<= 1, a->u ^= msbL << a->m, a->u++;
-            
-            //a->t <<= 1, a->t^=msbT << a->m, a->t += read_bit_from_stream(is);
-            a->t <<= 1, a->t^=msbT << a->m, a->t += stream_read_bit(is);
-            
-            msbL = a->l >> (a->m - 1);
-            msbU = a->u >> (a->m - 1);
-            msbT = a->t >> (a->m - 1);
-            
-            E1_E2 = (msbL == msbU);
-            
-            if (!E1_E2) {
-                smsbL = a->l >> (a->m - 2);
-                smsbU = (a->u >> (a->m - 2)) ^ 2;
-                E3 = (smsbL == 1 && smsbU == 0);
-            }
-            else E3 = 0;
+			a->l = (a->l & msb_clear_mask) << 1;
+			a->u = ((a->u & msb_clear_mask) << 1) + 1;
+			a->t = ((a->t & msb_clear_mask) << 1) + stream_read_bit(is);
+        }
+        else { // E3 is true
+			a->l = (a->l << 1) & msb_clear_mask;
+			a->u = (((a->u << 1) & msb_clear_mask) | (1 << msb_shift)) + 1;
+			a->t = (((a->t & msb_clear_mask) << 1) ^ (1 << msb_shift)) + stream_read_bit(is);
         }
         
-        // if condition E3 holds, increment scale3 and rescale.
-        if (E3){
+		msbL = a->l >> msb_shift;
+        msbU = a->u >> msb_shift;
+        E1_E2 = (msbL == msbU);
+		E3 = 0;
             
-            a->l <<= 1, a->l ^= msbL << a->m;
-            a->u <<= 1, a->u ^= msbU << a->m, a->u++;
-            
-            //a->t <<= 1, a->t^=msbT << a->m, a->t += read_bit_from_stream(is);
-            a->t <<= 1, a->t^=msbT << a->m, a->t += stream_read_bit(is);
-            
-            a->u ^= (1 << (a->m - 1));
-            a->l ^= (1 << (a->m - 1));
-            
-            a->t ^= (1 << (a->m - 1));
-            
-            msbL = a->l >> (a->m - 1);
-            msbU = a->u >> (a->m - 1);
-            msbT = a->t >> (a->m - 1);
-            
-            E1_E2 = (msbL == msbU);
-            
-            if (!E1_E2) {
-                smsbL = a->l >> (a->m - 2);
-                smsbU = (a->u >> (a->m - 2)) ^ 2;
-                E3 = (smsbL == 1 && smsbU == 0);
-            }
-            else E3 = 0;
+        if (!E1_E2) {
+			smsbL = a->l >> smsb_shift;
+			smsbU = a->u >> smsb_shift;
+			E3 = (smsbL == 0x01 && smsbU == 0x02);
         }
     }
     
