@@ -152,7 +152,7 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
     list->q[column][2*idx] = lo;
 	list->q[column][2*idx + 1] = hi;
     list->ratio[column][idx] = ratio;
-	list->qratio[column][idx] = (uint8_t) (ratio * 128);
+	list->qratio[column][idx] = (uint8_t) (ratio * 100.);
 }
 
 /**
@@ -161,7 +161,8 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
 struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev, uint32_t *q_idx) {
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
 	assert(idx != ALPHABET_SYMBOL_NOT_FOUND);
-	if (well_1024a_bits(&list->well, 7) >= list->qratio[column][idx]) {
+//	if (well_1024a_bits(&list->well, 7) >= list->qratio[column][idx]) {
+	if (well_1024a(&list->well) % 100 >= list->qratio[column][idx]) {
         *q_idx = 2*idx+1;
 		return list->q[column][2*idx+1];
 	}
@@ -584,8 +585,8 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 	struct quantizer_t *q_lo, *q_hi;
 	struct cond_quantizer_list_t *qlist;
 	struct alphabet_t *uniques;
-	double ratio;
 	char line[MAX_CODEBOOK_LINE_LENGTH];
+	uint8_t qratio;
 
 	fp = fopen(filename, "rt");
 	if (!fp) {
@@ -606,7 +607,7 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 
 	// Next line is qratio for zero quantizer offset by 33
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-	ratio = (line[0] - 33) / 128.;
+	qratio = line[0] - 33;
 
 	// Allocate some quantizers and copy the tables from lines 3 and 4
 	q_lo = alloc_quantizer(A);
@@ -621,7 +622,8 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 	find_output_alphabet(q_hi);
 	uniques = alloc_alphabet(0);
 	alphabet_union(q_lo->output_alphabet, q_hi->output_alphabet, uniques);
-	store_cond_quantizers_indexed(q_lo, q_hi, ratio, qlist, 0, 0);
+	store_cond_quantizers_indexed(q_lo, q_hi, 0.0, qlist, 0, 0);
+	qlist->qratio[0][0] = qratio;
 
 	// Now handle the remaining columns uniformly
 	for (column = 1; column < columns; ++column) {

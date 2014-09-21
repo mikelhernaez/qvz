@@ -33,9 +33,9 @@ void free_os_stream(struct os_stream_t *os) {
  * Reads a single bit from the stream
  */
 uint8_t stream_read_bit(struct os_stream_t *os) {
-	uint8_t rtn = os->buf[os->bufPos] & 1;
+	uint8_t rtn = os->buf[os->bufPos] >> 7;
 
-	os->buf[os->bufPos] = os->buf[os->bufPos] >> 1;
+	os->buf[os->bufPos] = os->buf[os->bufPos] << 1;
 	os->bitPos += 1;
 
 	if (os->bitPos == 8) {
@@ -47,7 +47,6 @@ uint8_t stream_read_bit(struct os_stream_t *os) {
 		}
 	}
 
-printf("read %d\n", rtn);
 	return rtn;
 }
 
@@ -64,7 +63,6 @@ uint32_t stream_read_bits(struct os_stream_t *os, uint8_t len) {
 		rtn |= stream_read_bit(os) << bit;
 	}
 
-printf("read bits %x\n", rtn);
 	return rtn;
 }
 
@@ -72,8 +70,7 @@ printf("read bits %x\n", rtn);
  * Writes a single bit to the stream
  */
 void stream_write_bit(struct os_stream_t *os, uint8_t bit) {
-	printf("write %d\n", bit&1);
-	bit = (bit & 1) << os->bitPos;
+	bit = (bit & 1);
 	os->buf[os->bufPos] |= bit;
 
 	os->bitPos += 1;
@@ -84,6 +81,9 @@ void stream_write_bit(struct os_stream_t *os, uint8_t bit) {
 		if (os->bufPos == OS_STREAM_BUF_LEN) {
 			stream_write_buffer(os);
 		}
+	}
+	else {
+		os->buf[os->bufPos] <<= 1;
 	}
 }
 
