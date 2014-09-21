@@ -130,7 +130,6 @@ uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_l
         
 		// Quantize, compress and calculate error simultaneously
 		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
-
         q_state = decompress_qv(qvc->Quals, 0, idx);
         line[0] = q->output_alphabet->symbols[q_state] + 33;
         prev_qv = line[0] - 33;
@@ -141,17 +140,10 @@ uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_l
             q_state = decompress_qv(qvc->Quals, s, idx);
             line[s] = q->output_alphabet->symbols[q_state] + 33;
             prev_qv = line[s] - 33;
-            
 		}
         
         // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
 		fwrite(line, columns+1, sizeof(uint8_t), fop);
-        
-        // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
-		//for(int lala = 0; lala < 36; lala++)
-        //    fprintf(fop, "%d ", line[lala]);
-        //fputc('\n', fop);
-        
 	}
     
     // Last Line
@@ -165,8 +157,7 @@ uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_l
     
     // Quantize, compress and calculate error simultaneously
     // Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
-    
-    q_state = decompress_qv(qvc->Quals, 0, 0);
+    q_state = decompress_qv(qvc->Quals, 0, idx);
     line[0] = q->output_alphabet->symbols[q_state] + 33;
     prev_qv = line[0] - 33;
     

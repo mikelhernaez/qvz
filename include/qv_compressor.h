@@ -1,13 +1,4 @@
-//
-//  fasta_compressor.h
-//  iDoComp_v1
-//
-//  Created by Mikel Hernaez on 8/7/14.
-//  Copyright (c) 2014 Mikel Hernaez. All rights reserved.
-//
-
 #ifndef qv_compressor_h
-
 #define qv_compressor_h
 
 #include <stdlib.h>
