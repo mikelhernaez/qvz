@@ -27,18 +27,21 @@
 
 #define m_arith  22
 
-#define OS_STREAM_BUF_LEN		4096
+#define OS_STREAM_BUF_LEN		(4096*4096)
 
 #define COMPRESSION 0
 #define DECOMPRESSION 1
 
-typedef struct Arithmetic_code_t{
+typedef struct Arithmetic_code_t {
     
     uint32_t scale3;
-    uint32_t m;
-    uint32_t l;
+    
+	uint32_t l;
     uint32_t u;
     uint32_t t;
+
+    uint32_t m;
+	uint32_t r;			// Rescaling condition
 }*Arithmetic_code;
 
 typedef struct os_stream_t {
@@ -49,17 +52,15 @@ typedef struct os_stream_t {
 	uint64_t written;
 } *osStream;
 
-typedef struct stream_stats_t{
-    
+typedef struct stream_stats_t {
     uint32_t *counts;
     uint32_t alphabetCard;
     uint32_t step;
     uint32_t n;
-    
-}*stream_stats;
+} *stream_stats_ptr_t;
 
-typedef struct arithStream_t{
-    stream_stats** stats;
+typedef struct arithStream_t {
+    stream_stats_ptr_t **stats;
     Arithmetic_code a;
     osStream os;
 }*arithStream;
@@ -83,15 +84,16 @@ void stream_write_buffer(struct os_stream_t *);
 
 // Arithmetic ncoder interface
 Arithmetic_code initialize_arithmetic_encoder(uint32_t m);
-uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t x, osStream os);
+void arithmetic_encoder_step(Arithmetic_code a, stream_stats_ptr_t stats, int32_t x, osStream os);
 int encoder_last_step(Arithmetic_code a, osStream os);
-uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats stats, osStream is);
-uint32_t decoder_last_step(Arithmetic_code a, stream_stats stats);
+uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats_ptr_t stats, osStream is);
+uint32_t decoder_last_step(Arithmetic_code a, stream_stats_ptr_t stats);
 
-stream_stats** initialize_stream_stats(struct cond_quantizer_list_t *q_list);
+// Encoding stats management
+stream_stats_ptr_t **initialize_stream_stats(struct cond_quantizer_list_t *q_list);
+void update_stats(stream_stats_ptr_t stats, uint32_t x, uint32_t r);
 
-uint32_t update_stats(stream_stats stats, int32_t x, uint32_t m);
-
+// Quality value compression interface
 void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx);
 uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx);
 

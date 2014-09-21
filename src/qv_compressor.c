@@ -1,20 +1,22 @@
 #include "qv_compressor.h"
 
+/**
+ * Compress a quality value and send it into the arithmetic encoder output stream,
+ * with appropriate context information
+ */
 void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx){
-    // Send x to the arithmetic encoder
     arithmetic_encoder_step(as->a, as->stats[column][idx], x, as->os);
-    
-    // Update the statistics
-    update_stats(as->stats[column][idx], x, as->a->m);
+    update_stats(as->stats[column][idx], x, as->a->r);
 }
 
-uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx){
+/**
+ * Retrieve a quality value from the arithmetic decoder input stream
+ */
+uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx) {
     uint32_t x;
     
-    // Send x to the arithmetic encoder
     x = arithmetic_decoder_step(as->a, as->stats[column][idx], as->os);
-    // Update the statistics
-    update_stats(as->stats[column][idx], x, as->a->m);
+    update_stats(as->stats[column][idx], x, as->a->r);
     
     return x;
 }
