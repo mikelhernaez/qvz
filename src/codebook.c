@@ -152,7 +152,7 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
     list->q[column][2*idx] = lo;
 	list->q[column][2*idx + 1] = hi;
     list->ratio[column][idx] = ratio;
-	list->qratio[column][idx] = (uint8_t) (ratio * 100.);
+	list->qratio[column][idx] = (uint8_t) (ratio * 128.);
 }
 
 /**
@@ -161,8 +161,7 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
 struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev, uint32_t *q_idx) {
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
 	assert(idx != ALPHABET_SYMBOL_NOT_FOUND);
-//	if (well_1024a_bits(&list->well, 7) >= list->qratio[column][idx]) {
-	if (well_1024a(&list->well) % 100 >= list->qratio[column][idx]) {
+	if (well_1024a_bits(&list->well, 7) >= list->qratio[column][idx]) {
         *q_idx = 2*idx+1;
 		return list->q[column][2*idx+1];
 	}
