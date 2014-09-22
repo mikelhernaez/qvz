@@ -98,7 +98,7 @@ void arithmetic_encoder_step(Arithmetic_code a, stream_stats_ptr_t stats, int32_
 
 int encoder_last_step(Arithmetic_code a, osStream os) {
     uint8_t msbL = a->l >> (a->m - 1);
-    
+
     // Write the msb of the tag (l)
 	stream_write_bit(os, msbL);
     
@@ -195,7 +195,7 @@ uint32_t decoder_last_step(Arithmetic_code a, stream_stats_ptr_t stats) {
     range = a->u - a->l + 1;
     tagGap = a->t - a->l + 1;
     
-    subRange = (tagGap * stats->n - 1) / range;
+    subRange = (tagGap * stats->n -1) / range;
     
     while (subRange >= cumCount)
         cumCount += stats->counts[k++];
