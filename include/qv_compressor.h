@@ -1,13 +1,4 @@
-//
-//  fasta_compressor.h
-//  iDoComp_v1
-//
-//  Created by Mikel Hernaez on 8/7/14.
-//  Copyright (c) 2014 Mikel Hernaez. All rights reserved.
-//
-
 #ifndef qv_compressor_h
-
 #define qv_compressor_h
 
 #include <stdlib.h>
@@ -27,41 +18,40 @@
 
 #define m_arith  22
 
+#define OS_STREAM_BUF_LEN		(4096*4096)
 
 #define COMPRESSION 0
 #define DECOMPRESSION 1
 
-typedef struct Arithmetic_code_t{
+typedef struct Arithmetic_code_t {
     
-    uint32_t scale3;
-    uint32_t m;
-    uint32_t l;
+    int32_t scale3;
+    
+	uint32_t l;
     uint32_t u;
     uint32_t t;
+
+    uint32_t m;
+	uint32_t r;			// Rescaling condition
 }*Arithmetic_code;
 
-typedef struct osStream_t{
-    
-    uint8_t bufferByte;
-    int8_t bitPos;
-    FILE *fos;
-    uint32_t osLength;
-    uint8_t *osBuffer;
-    uint32_t osbufferSize;
-    
-}*osStream;
+typedef struct os_stream_t {
+	FILE *fp;
+	uint8_t *buf;
+	uint32_t bufPos;
+	uint8_t bitPos;
+	uint64_t written;
+} *osStream;
 
-typedef struct stream_stats_t{
-    
+typedef struct stream_stats_t {
     uint32_t *counts;
     uint32_t alphabetCard;
     uint32_t step;
     uint32_t n;
-    
-}*stream_stats;
+} *stream_stats_ptr_t;
 
-typedef struct arithStream_t{
-    stream_stats** stats;
+typedef struct arithStream_t {
+    stream_stats_ptr_t **stats;
     Arithmetic_code a;
     osStream os;
 }*arithStream;
@@ -73,23 +63,28 @@ typedef struct qv_compressor_t{
 
 
 
+// Stream interface
+struct os_stream_t *alloc_os_stream(FILE *fp, uint8_t in);
+void free_os_stream(struct os_stream_t *);
+uint8_t stream_read_bit(struct os_stream_t *);
+uint32_t stream_read_bits(struct os_stream_t *os, uint8_t len);
+void stream_write_bit(struct os_stream_t *, uint8_t);
+void stream_write_bits(struct os_stream_t *os, uint32_t dw, uint8_t len);
+void stream_finish_byte(struct os_stream_t *);
+void stream_write_buffer(struct os_stream_t *);
 
-uint8_t read_bit_from_stream(osStream is);
-uint32_t read_uint32_from_stream(uint32_t numBits, osStream is);
-uint32_t send_bit_to_os(uint8_t bit, osStream os);
-uint32_t send_uint32_to_os(uint32_t num, uint8_t numBits, osStream os);
-osStream initialize_osStream(uint32_t osBuffer, FILE *fos, FILE *fosA, uint8_t inStream);
-
+// Arithmetic ncoder interface
 Arithmetic_code initialize_arithmetic_encoder(uint32_t m);
-uint32_t arithmetic_encoder_step(Arithmetic_code a, stream_stats stats, int32_t x, osStream os);
+void arithmetic_encoder_step(Arithmetic_code a, stream_stats_ptr_t stats, int32_t x, osStream os);
 int encoder_last_step(Arithmetic_code a, osStream os);
-uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats stats, osStream is);
-uint32_t decoder_last_step(Arithmetic_code a, stream_stats stats);
+uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats_ptr_t stats, osStream is);
+uint32_t decoder_last_step(Arithmetic_code a, stream_stats_ptr_t stats);
 
-stream_stats** initialize_stream_stats(struct cond_quantizer_list_t *q_list);
+// Encoding stats management
+stream_stats_ptr_t **initialize_stream_stats(struct cond_quantizer_list_t *q_list);
+void update_stats(stream_stats_ptr_t stats, uint32_t x, uint32_t r);
 
-uint32_t update_stats(stream_stats stats, int32_t x, uint32_t m);
-
+// Quality value compression interface
 void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx);
 uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx);
 
