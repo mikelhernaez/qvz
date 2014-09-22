@@ -121,7 +121,7 @@ uint32_t arithmetic_decoder_step(Arithmetic_code a, stream_stats_ptr_t stats, os
     int32_t k = 0, x = -1, i;
     uint32_t subRange = 0, cumCountX = 0, cumCountX_1 = 0, cumCount = 0;
     
-    uint8_t msbU = 0, msbL = 0, msbT = 0, E1_E2 = 0, E3 = 0, smsbL = 0, smsbU = 0;
+    uint8_t msbU = 0, msbL = 0, E1_E2 = 0, E3 = 0, smsbL = 0, smsbU = 0;
     
 	// Again, these are actually constants
 	uint32_t msb_shift = a->m - 1;
