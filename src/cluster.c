@@ -7,19 +7,13 @@
  * are discrete values, rather than continuous.
  */
 
-#define _CRT_SECURE_NO_WARNINGS
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#ifdef LINUX
-	#define _stat stat
-#endif
 
 #define SYMBOLS 41
 #define MAX_KMEANS_ITERATIONS 1000
@@ -27,7 +21,7 @@
 #define MAX_LINES_PER_BLOCK 1000000
 
 // Global constants, these should be moved into a metadata structure at some point
-static uint32_t columns = 76;
+static uint32_t columns = 36;
 static uint32_t total_lines = 0;
 
 // Store a single line and the cluster to which it belongs
