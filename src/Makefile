@@ -18,10 +18,10 @@ LDFLAGS=-lc -lm -lrt
 all : qvz
 
 cluster : $(CLUSTER_OBJ)
-	$(CC) $(LDFLAGS) $(CLUSTER_OBJ) -o cluster
+	$(CC) $(CLUSTER_OBJ) -o cluster $(LDFLAGS)
 
 qvz : $(OBJ)
-	$(CC) $(LDFLAGS) $(OBJ) -o qvz
+	$(CC)  $(OBJ) -o qvz $(LDFLAGS)
 
 debug : CFLAGS += -DDEBUG -ggdb
 debug : qvz

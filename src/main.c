@@ -65,6 +65,7 @@ void encode(char *input_name, char *output_name, char *codebook_name, struct qv_
 	if (opts->verbose) {
 		printf("Actual distortion: %f\n", distortion);
 		printf("Lines: %d\n", qlist->lines);
+		printf("Columns: %d\n", qlist->columns);
 		printf("Total bytes used: %llu\n", bytes_used);
 		printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
 		printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
@@ -72,7 +73,7 @@ void encode(char *input_name, char *output_name, char *codebook_name, struct qv_
 
 	// Parse-able stats
 	if (opts->stats) {
-		printf("rate, %.4f, distortion, %.4f, time, %.4f\n", (bytes_used*8.)/(qlist->lines*qlist->columns), distortion, get_timer_interval(&total));
+		printf("rate, %.4f, distortion, %.4f, time, %.4f, size, %lld \n", (bytes_used*8.)/((double)(qlist->lines)*qlist->columns), distortion, get_timer_interval(&total), bytes_used);
 	}
 }
 
