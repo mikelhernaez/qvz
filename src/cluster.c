@@ -180,7 +180,9 @@ void initialize_kmeans_clustering(struct quality_file_t *info) {
 		block_id = rand() % info->block_count;
 		line_id = rand() % info->blocks[block_id].count;
 		memcpy(clusters->clusters[j].mean.data, info->blocks[block_id].lines[line_id].data, info->columns*sizeof(uint8_t));
-		printf("Chose block %d, line %d.\n", block_id, line_id);
+		if (info->opts->verbose) {
+			printf("Chose block %d, line %d.\n", block_id, line_id);
+		}
 	}
 }
 
@@ -208,113 +210,12 @@ void do_kmeans_clustering(struct quality_file_t *info) {
 
 		recalculate_means(info);
 		iter_count += 1;
-		printf(".");
+		if (info->opts->verbose) {
+			printf(".");
+		}
 	}
 
-	printf("\nTotal number of iterations: %d.\n", iter_count);
+	if (info->opts->verbose) {
+		printf("\nTotal number of iterations: %d.\n", iter_count);
+	}
 }
-
-// @todo remove this
-/*
-int cluster_dummy(int argc, char **argv) {
-	struct cluster_list_t clusters;
-	struct line_block_t *blocks;
-	struct line_t *qline;
-	uint32_t block_count;
-	FILE *fp;
-	char line[1024];
-	char filename[1024];
-	struct _stat finfo;
-	uint8_t cluster_count;
-	uint32_t j, i, k;
-	struct hrtimer_t timer;
-	
-	if (argc != 4) {
-		printf("Usage: %s [file to cluster]  [number of clusters] [output prefix].\n", argv[0]);
-		exit(1);
-	}
-
-	start_timer(&timer);
-	srand(time(0));
-
-	fp = fopen(argv[1], "rt");
-	if (!fp) {
-		perror("Unable to open input file");
-		exit(1);
-	}
-
-	// Figure out how many columns we have from the first line
-	fgets(line, 1024, fp);
-	columns = strlen(line)-1;
-
-	// Then find the number of lines from the file size
-	_stat(argv[1], &finfo);
-	total_lines = finfo.st_size / (columns+1);
-
-	// Initialize cluster and line block storage
-	cluster_count = (uint8_t) atoi(argv[2]);
-	allocate_clusters(&clusters, cluster_count);
-	blocks = allocate_line_block(total_lines, &clusters, &block_count);
-
-	// Read in the file to our line blocks
-	j = 0;
-	i = 0;
-	do {
-		memcpy(blocks[j].lines[i].data, line, columns*sizeof(uint8_t));
-
-		// Adjust quality scores by 33
-		for (k = 0; k < columns; ++k) {
-			blocks[j].lines[i].data[k] -= 33;
-		}
-
-		// Find the place where we're storing the next line
-		i += 1;
-		if (i == blocks[j].count) {
-			j += 1;
-			i = 0;
-		}
-
-		// Read in this line
-		fgets(line, 1024, fp);
-	} while (!feof(fp));
-	fclose(fp);
-
-	// Run k-means clustering
-	printf("Beginning clustering...\n");
-	do_kmeans_clustering(blocks, block_count, &clusters);
-	printf("Clustering done.\n");
-
-	// Write out each cluster to a file
-	for (j = 0; j < clusters.count; ++j) {
-		sprintf(filename, "%s_cluster_%d.txt", argv[3], j);
-		printf("Cluster %d: ", j);
-		for (k = 0; k < columns; ++k) {
-			clusters.clusters[j].mean.data[k] += 33;
-			printf("%c", clusters.clusters[j].mean.data[k]);
-		}
-		printf("\n");
-		printf("Members: %d.\n", clusters.clusters[j].count);
-		
-		fp = fopen(filename, "wt");
-		for (i = 0; i < clusters.clusters[j].count; ++i) {
-			qline = clusters.clusters[j].members[i];
-
-			// Adjust quality scores for this line
-			for (k = 0; k < columns; ++k) {
-				qline->data[k] += 33;
-			}
-
-			// Write the line with a newline
-			fwrite(qline->data, columns, sizeof(uint8_t), fp);
-			fwrite("\n", 1, sizeof(char), fp);
-		}
-		fclose(fp);
-		printf("Write cluster %d to file %s.\n", j, filename);
-	}
-
-	stop_timer(&timer);
-	printf("Time elapsed: %f sec.\n", get_timer_interval(&timer));
-
-	return 0;
-}
-*/

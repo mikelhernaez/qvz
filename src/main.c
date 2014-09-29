@@ -26,7 +26,7 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	start_timer(&total);
     
 	// Load input file all at once
-	status = load_file(input_name, &qv_info, opts->training_size);
+	status = load_file(input_name, &qv_info, 0);
 	if (status != LF_ERROR_NONE) {
 		printf("load_file returned error: %d\n", status);
 		exit(1);
@@ -138,6 +138,7 @@ void usage(char *name) {
 	printf("\t-x\t\t: Extract quality values from compressed file\n");
 	printf("\t-f [ratio]\t: Compress using [ratio] bits per bit of input entropy per symbol\n");
 	printf("\t-r [rate]\t: Compress using fixed [rate] bits per symbol\n");
+	printf("\t-c [#]\t: Compress using [#] clusters (default: 3)\n");
 	printf("\t-h\t\t: Print this help\n");
 	printf("\t-s\t\t: Print summary stats\n");
 	printf("\t-t [lines]\t: Number of lines to use as training set (0 for all, 1000000 default)\n");
@@ -160,7 +161,7 @@ int main(int argc, char **argv) {
 	opts.verbose = 0;
 	opts.stats = 0;
 	opts.ratio = 0.5;
-	opts.clusters = 1;
+	opts.clusters = 3;
 
 	// No dependency, cross-platform command line parsing means no getopt
 	// So we need to settle for less than optimal flexibility (no combining short opts, maybe that will be added later)
@@ -209,6 +210,10 @@ int main(int argc, char **argv) {
 				i += 2;
 				printf("--Warning-- fixed rate encoding not yet implemented, falling back to ratio");
 				break;
+			case 'c':
+				opts.clusters = atoi(argv[i+1]);
+				i += 2;
+				break;
 			case 'v':
 				opts.verbose = 1;
 				i += 1;
@@ -249,6 +254,8 @@ int main(int argc, char **argv) {
 				printf("Fixed-rate mode selected, targeting %f bits per symbol\n", opts.ratio);
 			else if (opts.mode == MODE_FIXED_MSE)
 				printf("Fixed-MSE mode selected, targeting %f average MSE per context\n", opts.ratio);
+
+			printf("Compression will use %d clusters\n", opts.clusters);
 			// @todo other modes?
 		}
 	}
