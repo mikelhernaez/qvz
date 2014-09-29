@@ -9,80 +9,132 @@
 
 #include "util.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
-#include <time.h>
+#include <stdio.h>
+#include <malloc.h>
 
-#define SYMBOLS 41
-#define MAX_KMEANS_ITERATIONS 1000
-#define MAX_COLUMN_SIZE 1024
-#define MAX_LINES_PER_BLOCK 1000000
-
-// Global constants, these should be moved into a metadata structure at some point
-static uint32_t columns = 36;
-static uint32_t total_lines = 0;
-
-// Store a single line and the cluster to which it belongs
-struct line_t {
-	uint8_t cluster;			// Selected cluster for membership
-	double *distances;			// Distance to each cluster center
-	uint8_t *data;				// Data array for this line
-};
-
-// Stores information about each cluster
-struct cluster_t {
-	uint8_t id;					// Cluster ID
-	uint8_t pad1;				// Alignment variable
-	uint16_t pad2;				// Alignment variable
-
-	uint32_t count;				// Number of lines in this cluster
-	struct line_t **members;	// Array of pointers to the members
-
-	struct line_t mean;			// Fake line whose values are the mean for this cluster
-};
-
-// Stores information about all clusters
-struct cluster_list_t {
-	uint8_t count;
-	struct cluster_t *clusters;
-};
-
-// Stores information about a block of lines
-struct line_block_t {
-	uint32_t count;
-	struct line_t *lines;
-};
+#include "pmf.h"
+#include "codebook.h"
+#include "cluster.h"
 
 /**
- * Take a line and cluster information and calculates the distance, storing it in the line information vector
+ * Allocate the memory used for the clusters based on the number wanted and column config
  */
-void find_distance(struct line_t *line, struct cluster_t *cluster) {
-	double d = 0.0;
-	uint32_t i;
-	uint32_t data, mean;
+struct cluster_list_t *alloc_cluster_list(struct quality_file_t *info) {
+	uint8_t j;
+	struct cluster_list_t *rtn = (struct cluster_list_t *) calloc(1, sizeof(struct cluster_list_t));
 
-	for (i = 0; i < columns; ++i) {
-		data = line->data[i];
-		mean = cluster->mean.data[i];
-		d += (data - mean) * (data - mean);
+	// Allocate array of cluster structures
+	rtn->count = info->cluster_count;
+	rtn->clusters = (struct cluster_t *) calloc(info->cluster_count, sizeof(struct cluster_t));
+
+	// Fill in each cluster
+	for (j = 0; j < info->cluster_count; ++j) {
+		rtn->clusters[j].id = j;
+		rtn->clusters[j].count = 0;
+		rtn->clusters[j].mean.data = (symbol_t *) calloc(info->columns, sizeof(symbol_t));
+		// mean.cluster is skipped because it is unused
+		// mean.distances remains a null pointer because it is unused
+		rtn->clusters[j].members = (struct line_t **) calloc(info->lines, sizeof(struct line_t *));
+		rtn->clusters[j].training_stats = alloc_conditional_pmf_list(info->alphabet, info->columns);
 	}
-	line->distances[cluster->id] = d;
+
+	return rtn;
+}
+
+/**
+ * Deallocate the memory used for the clusters.
+ */
+void free_cluster_list(struct cluster_list_t *clusters) {
+	uint8_t j;
+
+	for (j = 0; j < clusters->count; ++j) {
+		free(clusters->clusters[j].mean.data);
+		free(clusters->clusters[j].members);
+	}
+	free(clusters->clusters);
+	free(clusters);
+}
+
+/**
+ * Calculates cluster assignments for the block of lines given, and return
+ * status indicating that at least one line changed clusters
+ */
+uint8_t cluster_lines(struct line_block_t *block, struct quality_file_t *info) {
+	uint32_t i;
+	uint8_t changed = 0;
+
+	for (i = 0; i < block->count; ++i) {
+		changed |= do_cluster_assignment(&block->lines[i], info);
+	}
+
+	return changed;
+}
+
+/**
+ * Updates the cluster means based on their assigned lines. Also clears the line count for
+ * the next iteration.
+ */
+void recalculate_means(struct quality_file_t *info) {
+	uint8_t i;
+
+	for (i = 0; i < info->cluster_count; ++i) {
+		calculate_cluster_mean(&info->clusters->clusters[i], info);
+	}
+}
+
+/**
+ * Calculates the mean for a cluster.
+ */
+void calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *info) {
+	struct line_t *line;
+	uint32_t i, j;
+	uint64_t *accumulator = _alloca(info->columns*sizeof(uint64_t));
+
+	// Clear previous
+	memset(accumulator, 0, info->columns*sizeof(uint64_t));
+
+	// Sum up everything column-wise
+	for (i = 0; i < cluster->count; ++i) {
+		line = cluster->members[i];
+		for (j = 0; j < info->columns; ++j) {
+			accumulator[j] += line->data[j];
+		}
+	}
+
+	// Integer division to find the mean, guaranteed to be less than the alphabet size
+	for (j = 0; j < info->columns; ++j) {
+		cluster->mean.data[j] = (uint8_t) (accumulator[j] / cluster->count);
+	}
+
+}
+
+/**
+ * Compare each line to each cluster to find distances
+ */
+uint8_t do_cluster_assignment(struct line_t *line, struct quality_file_t *info) {
+	uint8_t i;
+
+	for (i = 0; i < info->cluster_count; ++i) {
+		find_distance(line, &info->clusters->clusters[i], info);
+	}
+
+	return assign_cluster(line, info);
 }
 
 /**
  * Assigns a cluster based on the one with the lowest distance
  */
-uint8_t assign_cluster(struct line_t *line, struct cluster_list_t *clusters) {
-	uint8_t id = line->cluster;
+uint8_t assign_cluster(struct line_t *line, struct quality_file_t *info) {
+	uint8_t id = 0;
 	uint8_t prev_id = line->cluster;
 	uint8_t i;
 	struct cluster_t *cluster;
 	double d = line->distances[0];
 
 	// Find the cluster with minimum distance
-	for (i = 1; i < clusters->count; ++i) {
+	for (i = 1; i < info->cluster_count; ++i) {
 		if (line->distances[i] < d) {
 			id = i;
 			d = line->distances[i];
@@ -91,7 +143,7 @@ uint8_t assign_cluster(struct line_t *line, struct cluster_list_t *clusters) {
 
 	// Assign to that cluster
 	line->cluster = id;
-	cluster = &clusters->clusters[id];
+	cluster = &info->clusters->clusters[id];
 	cluster->members[cluster->count] = line;
 	cluster->count += 1;
 
@@ -99,176 +151,50 @@ uint8_t assign_cluster(struct line_t *line, struct cluster_list_t *clusters) {
 }
 
 /**
- * Compare each line to each cluster to find distances
+ * Take a line and cluster information and calculates the distance, storing it in the line information vector
  */
-uint8_t do_cluster_assignment(struct line_t *line, struct cluster_list_t *clusters) {
-	uint8_t i;
-
-	for (i = 0; i < clusters->count; ++i) {
-		find_distance(line, &clusters->clusters[i]);
-	}
-
-	return assign_cluster(line, clusters);
-}
-
-/**
- * Calculates the mean for a cluster.
- */
-void calculate_cluster_mean(struct cluster_t *cluster) {
-	struct line_t *line;
-	uint32_t i, j;
-	uint64_t accumulator[MAX_COLUMN_SIZE];
-
-	// Clear previous
-	memset(accumulator, 0, columns*sizeof(uint64_t));
-
-	// Sum up everything column-wise
-	for (i = 0; i < cluster->count; ++i) {
-		line = cluster->members[i];
-		for (j = 0; j < columns; ++j) {
-			accumulator[j] += line->data[j];
-		}
-	}
-
-	// Integer division to find the mean, guaranteed to be less than SYMBOLS
-	for (j = 0; j < columns; ++j) {
-		cluster->mean.data[j] = (uint8_t) (accumulator[j] / cluster->count);
-	}
-
-}
-
-/**
- * Updates the cluster means based on their assigned lines. Also clears the line count for
- * the next iteration.
- */
-void recalculate_means(struct cluster_list_t *clusters) {
-	uint8_t i;
-
-	for (i = 0; i < clusters->count; ++i) {
-		calculate_cluster_mean(&clusters->clusters[i]);
-	}
-}
-
-/**
- * Calculates cluster assignments for the block of lines given, and return
- * status indicating that at least one line changed clusters
- */
-uint8_t cluster_lines(struct line_block_t *block, struct cluster_list_t *clusters) {
+void find_distance(struct line_t *line, struct cluster_t *cluster, struct quality_file_t *info) {
+	double d = 0.0;
 	uint32_t i;
-	uint8_t changed = 0;
+	uint32_t data, mean;
 
-	for (i = 0; i < block->count; ++i) {
-		changed |= do_cluster_assignment(&block->lines[i], clusters);
+	for (i = 0; i < info->columns; ++i) {
+		data = line->data[i];
+		mean = cluster->mean.data[i];
+		//d += (data - mean) * (data - mean);
+		d += get_distortion(info->dist, data, mean);
 	}
-
-	return changed;
+	line->distances[cluster->id] = d;
 }
 
 /**
  * Initialize the cluster means based on the data given, using random selection
  */
-void initialize_kmeans_clustering(struct line_block_t *blocks, uint32_t block_count, struct cluster_list_t *clusters) {
+void initialize_kmeans_clustering(struct quality_file_t *info) {
 	uint8_t j;
 	uint32_t block_id;
 	uint32_t line_id;
+	struct cluster_list_t *clusters = info->clusters;
 
-	for (j = 0; j < clusters->count; ++j) {
-		block_id = rand() % block_count;
-		line_id = rand() % blocks[block_id].count;
-		memcpy(clusters->clusters[j].mean.data, blocks[block_id].lines[line_id].data, columns*sizeof(uint8_t));
+	for (j = 0; j < info->cluster_count; ++j) {
+		block_id = rand() % info->block_count;
+		line_id = rand() % info->blocks[block_id].count;
+		memcpy(clusters->clusters[j].mean.data, info->blocks[block_id].lines[line_id].data, info->columns*sizeof(uint8_t));
 		printf("Chose block %d, line %d.\n", block_id, line_id);
 	}
 }
 
 /**
- * Allocate the memory used for the clusters based on the number wanted and column config
- */
-void allocate_clusters(struct cluster_list_t *clusters, uint8_t count) {
-	uint8_t j;
-
-	// Allocate array of cluster structures
-	clusters->count = count;
-	clusters->clusters = (struct cluster_t *) calloc(count, sizeof(struct cluster_t));
-
-	// Fill in each cluster
-	for (j = 0; j < count; ++j) {
-		clusters->clusters[j].id = j;
-		clusters->clusters[j].count = 0;
-		clusters->clusters[j].mean.data = (uint8_t *) calloc(columns, sizeof(uint8_t));
-		// mean.cluster is skipped because it is unused
-		// mean.distances remains a null pointer because it is unused
-		clusters->clusters[j].members = (struct line_t **) calloc(total_lines, sizeof(struct line_t *));
-	}
-}
-
-/**
- * Deallocate the memory used for the clusters. Only needed if we're not going to just exit the program
- * so it is a TODO for now.
- */
-void deallocate_clusters(struct cluster_list_t *clusters) {}
-
-/**
- * Allocate an array of line blocks able to store line pointers to the appropriate number of lines
- * along with the right kinds of distance buffer data
- */
-struct line_block_t *allocate_line_block(uint32_t line_count, struct cluster_list_t *clusters, uint32_t *block_count) {
-	uint32_t blocks;
-	struct line_block_t *line_block;
-	uint8_t *data_block;
-	double *distance_block;
-	uint32_t j, i;
-	uint32_t lines;
-
-	// Need ceiling block count
-	blocks = (line_count / MAX_LINES_PER_BLOCK);
-	if (blocks * MAX_LINES_PER_BLOCK < line_count)
-		blocks += 1;
-
-	// Allocate block array
-	line_block = (struct line_block_t *) calloc(blocks, sizeof(struct line_block_t));
-	*block_count = blocks;
-
-	// For each block, allocate line structures, data and distance blocks, and configure the pointers
-	for (j = 0; j < blocks; ++j) {
-		if (line_count > MAX_LINES_PER_BLOCK)
-			lines = MAX_LINES_PER_BLOCK;
-		else
-			lines = line_count;
-
-		line_block[j].count = lines;
-		line_block[j].lines = (struct line_t *) calloc(lines, sizeof(struct line_t));
-		data_block = (uint8_t *) calloc(lines, columns * sizeof(uint8_t));
-		distance_block = (double *) calloc(lines, clusters->count * sizeof(double));
-
-		for (i = 0; i < lines; ++i) {
-			line_block[j].lines[i].data = data_block;
-			line_block[j].lines[i].distances = distance_block;
-			data_block += columns;
-			distance_block += clusters->count;
-		}
-
-		line_count -= lines;
-	}
-
-	return line_block;
-}
-
-/**
- * Deallocates an array of line blocks
- * TODO: Don't need to clean up yet!
- */
-void deallocate_line_block(struct line_block_t *block) {}
-
-/**
  * Do k-means clustering over the set of blocks given to produce a set of clusters that
  * fills the cluster list given
  */
-void do_kmeans_clustering(struct line_block_t *blocks, uint32_t block_count, struct cluster_list_t *clusters) {
+void do_kmeans_clustering(struct quality_file_t *info) {
 	uint32_t iter_count = 0;
 	uint8_t changed = 1;
 	uint32_t j;
+	struct cluster_list_t *clusters = info->clusters;
 
-	initialize_kmeans_clustering(blocks, block_count, clusters);
+	initialize_kmeans_clustering(info);
 
 	while (iter_count < MAX_KMEANS_ITERATIONS && changed) {
 		for (j = 0; j < clusters->count; ++j) {
@@ -276,11 +202,11 @@ void do_kmeans_clustering(struct line_block_t *blocks, uint32_t block_count, str
 		}
 
 		changed = 0;
-		for (j = 0; j < block_count; ++j) {
-			changed |= cluster_lines(&blocks[j], clusters);
+		for (j = 0; j < info->block_count; ++j) {
+			changed |= cluster_lines(&info->blocks[j], info);
 		}
 
-		recalculate_means(clusters);
+		recalculate_means(info);
 		iter_count += 1;
 		printf(".");
 	}
@@ -288,10 +214,9 @@ void do_kmeans_clustering(struct line_block_t *blocks, uint32_t block_count, str
 	printf("\nTotal number of iterations: %d.\n", iter_count);
 }
 
-/**
- * Driver program that reads in the files and writes out the files
- */
-int main(int argc, char **argv) {
+// @todo remove this
+/*
+int cluster_dummy(int argc, char **argv) {
 	struct cluster_list_t clusters;
 	struct line_block_t *blocks;
 	struct line_t *qline;
@@ -392,3 +317,4 @@ int main(int argc, char **argv) {
 
 	return 0;
 }
+*/

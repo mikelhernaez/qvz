@@ -8,102 +8,122 @@
 
 #include "codebook.h"
 #include "qv_compressor.h"
+#include "cluster.h"
 
 /**
  *
  */
-void encode(char *input_name, char *output_name, char *codebook_name, struct qv_options_t *opts) {
-	// New variables, definitely used
+void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
+	struct quality_file_t qv_info;
 	struct distortion_t *dist = generate_distortion_matrix(41, DISTORTION_MSE);
 	struct alphabet_t *alphabet = alloc_alphabet(41);
-	struct quality_file_t training_file;
-	struct cond_pmf_list_t *training_stats;
-	struct cond_quantizer_list_t *qlist;
 	uint32_t status;
-	struct hrtimer_t stats, encoding, total;
-	FILE *fp;
+	struct hrtimer_t cluster_time, stats, encoding, total;
+	FILE *fin, *fout;
 	uint64_t bytes_used;
     double distortion;
 
 	start_timer(&total);
-	start_timer(&stats);
     
-	// Load file statistics and find statistics for the training data
-	status = load_file(input_name, &training_file, opts->training_size);
+	// Load input file all at once
+	status = load_file(input_name, &qv_info, opts->training_size);
 	if (status != LF_ERROR_NONE) {
 		printf("load_file returned error: %d\n", status);
 		exit(1);
 	}
+
+	// Set up clustering data structures
+	qv_info.alphabet = alphabet;
+	qv_info.dist = dist;
+	qv_info.cluster_count = opts->clusters;
+	qv_info.clusters = alloc_cluster_list(&qv_info);
+	qv_info.opts = opts;
+
+	// Do k-means clustering
+	start_timer(&cluster_time);
+	do_kmeans_clustering(&qv_info);
+	stop_timer(&cluster_time);
+	if (opts->verbose) {
+		printf("Clustering took %.4f seconds\n", get_timer_interval(&cluster_time));
+	}
     
-	training_stats = alloc_conditional_pmf_list(alphabet, training_file.columns);
-	qlist = generate_codebooks(&training_file, training_stats, dist, opts);
-    
+	// Then find stats and generate codebooks for each cluster
+	start_timer(&stats);
+	calculate_statistics(&qv_info);
+	generate_codebooks(&qv_info);
 	stop_timer(&stats);
-	start_timer(&encoding);
     
 	if (opts->verbose) {
 		printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
-		printf("Expected distortion: %f\n", opts->e_dist);
+		// @todo expected distortion is inaccurate due to lack of pmf
+		//printf("Expected distortion: %f\n", opts->e_dist);
 	}
     
-	fp = fopen(input_name, "rt");
-	if (!fp) {
-		perror("Unable to open input file");
+	// Note that we want \r\n translation in the input
+	// but we do not want it in the output
+	fin = fopen(input_name, "rt");
+	fout = fopen(output_name, "wb");
+	if (!fin || !fout) {
+		perror("Unable to open input and output files");
 		exit(1);
 	}
 	
-    bytes_used = start_qv_compression(fp, output_name, qlist, &distortion);
-	fclose(fp);
-
-	// Write codebook second so that we know how many lines were encoded
-	write_codebook(codebook_name, qlist);
-	
+	// @todo qv_compression should use quality_file structure with data in memory, now
+	start_timer(&encoding);
+	write_codebooks(fout, &qv_info);
+    bytes_used = start_qv_compression(&qv_info, fout, &distortion);
 	stop_timer(&encoding);
 	stop_timer(&total);
+
+	fclose(fin);
+	fclose(fout);
     
 	// Verbose stats
 	if (opts->verbose) {
+		// @todo add cluster info here
 		printf("Actual distortion: %f\n", distortion);
-		printf("Lines: %d\n", qlist->lines);
-		printf("Columns: %d\n", qlist->columns);
-		printf("Total bytes used: %llu\n", bytes_used);
+		printf("Lines: %lu\n", qv_info.lines);
+		printf("Columns: %u\n", qv_info.columns);
+		printf("Total bytes used: %lu\n", bytes_used);
 		printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
 		printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
 	}
 
 	// Parse-able stats
 	if (opts->stats) {
-		printf("rate, %.4f, distortion, %.4f, time, %.4f, size, %lld \n", (bytes_used*8.)/((double)(qlist->lines)*qlist->columns), distortion, get_timer_interval(&total), bytes_used);
+		printf("rate, %.4f, distortion, %.4f, time, %.4f, size, %lu \n", (bytes_used*8.)/((double)(qv_info.lines)*qv_info.columns), distortion, get_timer_interval(&total), bytes_used);
 	}
 }
 
 /**
  *
  */
-void decode(char *input_file, char *output_file, char* codebook_file, struct qv_options_t *opts) {
-	FILE *fout;
+void decode(char *input_file, char *output_file, struct qv_options_t *opts) {
+	FILE *fin, *fout;
 	struct hrtimer_t timer;
-	struct cond_quantizer_list_t *qlist;
+	struct quality_file_t qv_info;
 	struct alphabet_t *A = alloc_alphabet(41);
     
+	qv_info.alphabet = A;
+
 	start_timer(&timer);
-    
-	qlist = read_codebook(codebook_file, A);
-	qlist->options = opts;
-    
+
+	fin = fopen(input_file, "rb");
 	fout = fopen(output_file, "wt");
-	if (!fout) {
-		perror("Unable to open output file");
+	if (!fin || !fout) {
+		perror("Unable to open input or output files");
 		exit(1);
 	}
-    
-    start_qv_decompression(fout, input_file, qlist);
+
+	read_codebooks(fin, &qv_info);
+    start_qv_decompression(fout, fin, &qv_info);
 
 	fclose(fout);
+	fclose(fin);
 	stop_timer(&timer);
 
 	if (opts->verbose) {
-		printf("Decoded %d lines in %f seconds.\n", qlist->lines, get_timer_interval(&timer));
+		printf("Decoded %lu lines in %f seconds.\n", qv_info.lines, get_timer_interval(&timer));
 	}
 }
 
@@ -112,9 +132,9 @@ void decode(char *input_file, char *output_file, char* codebook_file, struct qv_
  * @param name Program name string
  */
 void usage(char *name) {
-	printf("Usage: %s (options) [codebook file] [input file] [output file]\n", name);
+	printf("Usage: %s (options) [input file] [output file]\n", name);
 	printf("Options are:\n");
-	printf("\t-c\t\t: Store quality values in compressed file (default)\n");
+	printf("\t-q\t\t: Store quality values in compressed file (default)\n");
 	printf("\t-x\t\t: Extract quality values from compressed file\n");
 	printf("\t-f [ratio]\t: Compress using [ratio] bits per bit of input entropy per symbol\n");
 	printf("\t-r [rate]\t: Compress using fixed [rate] bits per symbol\n");
@@ -130,7 +150,6 @@ void usage(char *name) {
 int main(int argc, char **argv) {
     char *input_name = 0;
 	char *output_name = 0;
-	char *codebook_name = 0;
 	struct qv_options_t opts;
 	uint32_t i;
 
@@ -141,6 +160,7 @@ int main(int argc, char **argv) {
 	opts.verbose = 0;
 	opts.stats = 0;
 	opts.ratio = 0.5;
+	opts.clusters = 1;
 
 	// No dependency, cross-platform command line parsing means no getopt
 	// So we need to settle for less than optimal flexibility (no combining short opts, maybe that will be added later)
@@ -150,16 +170,12 @@ int main(int argc, char **argv) {
 		if (argv[i][0] != '-') {
 			switch (file_idx) {
 				case 0:
-					codebook_name = argv[i];
+					input_name = argv[i];
 					file_idx = 1;
 					break;
 				case 1:
-					input_name = argv[i];
-					file_idx = 2;
-					break;
-				case 2:
 					output_name = argv[i];
-					file_idx = 3;
+					file_idx = 2;
 					break;
 				default:
 					printf("Garbage argument \"%s\" detected.\n", argv[i]);
@@ -176,7 +192,7 @@ int main(int argc, char **argv) {
 				extract = 1;
 				i += 1;
 				break;
-			case 'c':
+			case 'q':
 				extract = 0;
 				i += 1;
 				break;
@@ -215,7 +231,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (file_idx != 3) {
+	if (file_idx != 2) {
 		printf("Missing required filenames.\n");
 		usage(argv[0]);
 		exit(1);
@@ -238,10 +254,10 @@ int main(int argc, char **argv) {
 	}
 
 	if (extract) {
-		decode(input_name, output_name, codebook_name, &opts);
+		decode(input_name, output_name, &opts);
 	}
 	else {
-		encode(input_name, output_name, codebook_name, &opts);
+		encode(input_name, output_name, &opts);
 	}
 
 #ifndef LINUX

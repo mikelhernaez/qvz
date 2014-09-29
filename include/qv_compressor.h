@@ -24,7 +24,6 @@
 #define DECOMPRESSION 1
 
 typedef struct Arithmetic_code_t {
-    
     int32_t scale3;
     
 	uint32_t l;
@@ -51,7 +50,8 @@ typedef struct stream_stats_t {
 } *stream_stats_ptr_t;
 
 typedef struct arithStream_t {
-    stream_stats_ptr_t **stats;
+	stream_stats_ptr_t cluster_stats;
+    stream_stats_ptr_t ***stats;
     Arithmetic_code a;
     osStream os;
 }*arithStream;
@@ -85,12 +85,14 @@ stream_stats_ptr_t **initialize_stream_stats(struct cond_quantizer_list_t *q_lis
 void update_stats(stream_stats_ptr_t stats, uint32_t x, uint32_t r);
 
 // Quality value compression interface
-void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx);
-uint32_t decompress_qv(arithStream as, uint32_t column, uint32_t idx);
+void compress_qv(arithStream as, uint32_t x, uint8_t cluster, uint32_t column, uint32_t idx);
+void qv_write_cluster(arithStream as, uint8_t cluster);
+uint32_t decompress_qv(arithStream as, uint8_t cluster, uint32_t column, uint32_t idx);
+uint8_t qv_read_cluster(arithStream as);
 
-qv_compressor initialize_qv_compressor(char osPath[], uint8_t streamDirection, struct cond_quantizer_list_t *q_list);
+qv_compressor initialize_qv_compressor(FILE *fout, uint8_t streamDirection, struct quality_file_t *info);
 
-uint32_t start_qv_compression(FILE *fp, char* osPath, struct cond_quantizer_list_t *qlist, double *dis);
-uint32_t start_qv_decompression(FILE *fop, char* isPath, struct cond_quantizer_list_t *qlist);
+uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *dis);
+void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info);
 
 #endif
