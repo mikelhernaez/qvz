@@ -52,6 +52,7 @@ void free_cluster_list(struct cluster_list_t *clusters) {
 	for (j = 0; j < clusters->count; ++j) {
 		free(clusters->clusters[j].mean.data);
 		free(clusters->clusters[j].members);
+		free_conditional_pmf_list(clusters->clusters[j].training_stats);
 	}
 	free(clusters->clusters);
 	free(clusters);
@@ -107,7 +108,6 @@ void calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *in
 	for (j = 0; j < info->columns; ++j) {
 		cluster->mean.data[j] = (uint8_t) (accumulator[j] / cluster->count);
 	}
-
 }
 
 /**

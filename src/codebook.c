@@ -586,7 +586,6 @@ void read_codebooks(FILE *fp, struct quality_file_t *info) {
 	// Figure out how many clusters we have to set up cluster sizes
 	fread(line, sizeof(char), 9, fp);
 	info->cluster_count = line[0];
-	info->clusters = alloc_cluster_list(info);
 
 	// Recover columns and lines as 32 bit integers
 	info->columns = (line[1] & 0xff) | ((line[2] << 8) & 0xff00) | ((line[3] << 16) & 0xff0000) | ((line[4] << 24) & 0xff000000);
@@ -594,6 +593,9 @@ void read_codebooks(FILE *fp, struct quality_file_t *info) {
 	info->lines = (line[5] & 0xff) | ((line[6] << 8) & 0xff00) | ((line[7] << 16) & 0xff0000) | ((line[8] << 24) & 0xff000000);
 	info->lines = ntohl(info->lines);
 	
+	// Can't allocate clusters until we know how many columns there are
+	info->clusters = alloc_cluster_list(info);
+
 	// Read codebooks in order
 	for (j = 0; j < info->cluster_count; ++j) {
 		info->clusters->clusters[j].qlist = read_codebook(fp, info);

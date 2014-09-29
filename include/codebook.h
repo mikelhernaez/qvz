@@ -68,7 +68,7 @@ struct cond_quantizer_list_t {
 // Memory management
 struct cond_pmf_list_t *alloc_conditional_pmf_list(const struct alphabet_t *alphabet, uint32_t columns);
 struct cond_quantizer_list_t *alloc_conditional_quantizer_list(uint32_t columns);
-void free_cond_pmf_list(struct cond_pmf_list_t *);
+void free_conditional_pmf_list(struct cond_pmf_list_t *);
 void free_cond_quantizer_list(struct cond_quantizer_list_t *);
 
 // Per-column initializer for conditional quantizer list

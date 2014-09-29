@@ -22,6 +22,7 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	FILE *fin, *fout;
 	uint64_t bytes_used;
     double distortion;
+	char tmp[100];
 
 	start_timer(&total);
     
@@ -39,6 +40,8 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	qv_info.clusters = alloc_cluster_list(&qv_info);
 	qv_info.opts = opts;
 
+scanf("%d", tmp);
+
 	// Do k-means clustering
 	start_timer(&cluster_time);
 	do_kmeans_clustering(&qv_info);
@@ -47,12 +50,16 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 		printf("Clustering took %.4f seconds\n", get_timer_interval(&cluster_time));
 	}
     
+scanf("%d", tmp);
+
 	// Then find stats and generate codebooks for each cluster
 	start_timer(&stats);
 	calculate_statistics(&qv_info);
 	generate_codebooks(&qv_info);
 	stop_timer(&stats);
     
+scanf("%d", tmp);
+
 	if (opts->verbose) {
 		printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
 		// @todo expected distortion is inaccurate due to lack of pmf
