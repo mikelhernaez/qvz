@@ -22,10 +22,13 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	FILE *fout;
 	uint64_t bytes_used;
     double distortion;
-	char tmp[100];
 
 	start_timer(&total);
     
+	qv_info.alphabet = alphabet;
+	qv_info.dist = dist;
+	qv_info.cluster_count = opts->clusters;
+
 	// Load input file all at once
 	status = load_file(input_name, &qv_info, 0);
 	if (status != LF_ERROR_NONE) {
@@ -34,13 +37,8 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	}
 
 	// Set up clustering data structures
-	qv_info.alphabet = alphabet;
-	qv_info.dist = dist;
-	qv_info.cluster_count = opts->clusters;
 	qv_info.clusters = alloc_cluster_list(&qv_info);
 	qv_info.opts = opts;
-
-scanf("%d", tmp);
 
 	// Do k-means clustering
 	start_timer(&cluster_time);
@@ -50,16 +48,12 @@ scanf("%d", tmp);
 		printf("Clustering took %.4f seconds\n", get_timer_interval(&cluster_time));
 	}
     
-scanf("%d", tmp);
-
 	// Then find stats and generate codebooks for each cluster
 	start_timer(&stats);
 	calculate_statistics(&qv_info);
 	generate_codebooks(&qv_info);
 	stop_timer(&stats);
     
-scanf("%d", tmp);
-
 	if (opts->verbose) {
 		printf("Stats and codebook generation took %.4f seconds\n", get_timer_interval(&stats));
 		// @todo expected distortion is inaccurate due to lack of pmf

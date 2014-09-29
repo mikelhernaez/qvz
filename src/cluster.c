@@ -91,7 +91,7 @@ void recalculate_means(struct quality_file_t *info) {
 void calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *info) {
 	struct line_t *line;
 	uint32_t i, j;
-	uint64_t *accumulator = _alloca(info->columns*sizeof(uint64_t));
+	uint64_t *accumulator = (uint64_t *) _alloca(info->columns*sizeof(uint64_t));
 
 	// Clear previous
 	memset(accumulator, 0, info->columns*sizeof(uint64_t));
@@ -127,7 +127,7 @@ uint8_t do_cluster_assignment(struct line_t *line, struct quality_file_t *info) 
  * Assigns a cluster based on the one with the lowest distance
  */
 uint8_t assign_cluster(struct line_t *line, struct quality_file_t *info) {
-	uint8_t id = line->cluster;
+	uint8_t id = 0;
 	uint8_t prev_id = line->cluster;
 	uint8_t i;
 	struct cluster_t *cluster;
