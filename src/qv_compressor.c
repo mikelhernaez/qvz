@@ -1,3 +1,4 @@
+#include <assert.h>
 #include "qv_compressor.h"
 
 /**
@@ -165,6 +166,7 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
         lineCtr++;
 
 		cluster_id = qv_read_cluster(qvc->Quals);
+		assert(cluster_id < info->cluster_count);
 		qlist = info->clusters->clusters[cluster_id].qlist;
         
 		// Select first column's codebook with no left context
@@ -195,6 +197,7 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
     lineCtr++;
     
 	cluster_id = qv_read_cluster(qvc->Quals);
+		assert(cluster_id < info->cluster_count);
 	qlist = info->clusters->clusters[cluster_id].qlist;
 
     // Select first column's codebook with no left context

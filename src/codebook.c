@@ -616,7 +616,10 @@ struct cond_quantizer_list_t *read_codebook(FILE *fp, struct quality_file_t *inf
 	struct alphabet_t *A = info->alphabet;
 	uint32_t columns = info->columns;
 
+	uniques = alloc_alphabet(1);
 	qlist = alloc_conditional_quantizer_list(info->columns);
+	cond_quantizer_init_column(qlist, 0, uniques);
+	free_alphabet(uniques);
 
 	// Next line is qratio for zero quantizer offset by 33
 	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);

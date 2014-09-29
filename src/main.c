@@ -19,7 +19,7 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	struct alphabet_t *alphabet = alloc_alphabet(41);
 	uint32_t status;
 	struct hrtimer_t cluster_time, stats, encoding, total;
-	FILE *fin, *fout;
+	FILE *fout;
 	uint64_t bytes_used;
     double distortion;
 	char tmp[100];
@@ -68,10 +68,9 @@ scanf("%d", tmp);
     
 	// Note that we want \r\n translation in the input
 	// but we do not want it in the output
-	fin = fopen(input_name, "rt");
 	fout = fopen(output_name, "wb");
-	if (!fin || !fout) {
-		perror("Unable to open input and output files");
+	if (!fout) {
+		perror("Unable to open output file");
 		exit(1);
 	}
 	
@@ -82,7 +81,6 @@ scanf("%d", tmp);
 	stop_timer(&encoding);
 	stop_timer(&total);
 
-	fclose(fin);
 	fclose(fout);
     
 	// Verbose stats
@@ -112,6 +110,7 @@ void decode(char *input_file, char *output_file, struct qv_options_t *opts) {
 	struct alphabet_t *A = alloc_alphabet(41);
     
 	qv_info.alphabet = A;
+	qv_info.opts = opts;
 
 	start_timer(&timer);
 
