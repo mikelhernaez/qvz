@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <malloc.h>
+//#include <malloc.h>
 
 #include "pmf.h"
 #include "codebook.h"

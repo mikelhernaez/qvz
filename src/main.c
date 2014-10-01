@@ -81,16 +81,16 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	if (opts->verbose) {
 		// @todo add cluster info here
 		printf("Actual distortion: %f\n", distortion);
-		printf("Lines: %lu\n", qv_info.lines);
+		printf("Lines: %llu\n", qv_info.lines);
 		printf("Columns: %u\n", qv_info.columns);
-		printf("Total bytes used: %lu\n", bytes_used);
+		printf("Total bytes used: %llu\n", bytes_used);
 		printf("Encoding took %.4f seconds.\n", get_timer_interval(&total));
 		printf("Total time elapsed: %.4f seconds.\n", get_timer_interval(&total));
 	}
 
 	// Parse-able stats
 	if (opts->stats) {
-		printf("rate, %.4f, distortion, %.4f, time, %.4f, size, %lu \n", (bytes_used*8.)/((double)(qv_info.lines)*qv_info.columns), distortion, get_timer_interval(&total), bytes_used);
+		printf("rate, %.4f, distortion, %.4f, time, %.4f, size, %llu \n", (bytes_used*8.)/((double)(qv_info.lines)*qv_info.columns), distortion, get_timer_interval(&total), bytes_used);
 	}
 }
 
@@ -123,7 +123,7 @@ void decode(char *input_file, char *output_file, struct qv_options_t *opts) {
 	stop_timer(&timer);
 
 	if (opts->verbose) {
-		printf("Decoded %lu lines in %f seconds.\n", qv_info.lines, get_timer_interval(&timer));
+		printf("Decoded %llu lines in %f seconds.\n", qv_info.lines, get_timer_interval(&timer));
 	}
 }
 
@@ -162,6 +162,7 @@ int main(int argc, char **argv) {
 	opts.stats = 0;
 	opts.ratio = 0.5;
 	opts.clusters = 3;
+    opts.uncompressed = 0;
 
 	// No dependency, cross-platform command line parsing means no getopt
 	// So we need to settle for less than optimal flexibility (no combining short opts, maybe that will be added later)
@@ -229,6 +230,9 @@ int main(int argc, char **argv) {
 				opts.training_size = atoi(argv[i+1]);
 				i += 2;
 				break;
+            case 'u':
+                opts.uncompressed = 1;
+                i += 1;
 			default:
 				printf("Unrecognized option -%c.\n", argv[i][1]);
 				usage(argv[0]);
