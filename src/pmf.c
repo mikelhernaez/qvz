@@ -3,6 +3,7 @@
 
 #include "pmf.h"
 
+//#define log2(a) log(a)/log(2.0)
 /**
  * Allocates the memory for an alphabet structure and fills the symbols
  * with a default list of 0 through size-1

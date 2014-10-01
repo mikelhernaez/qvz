@@ -4,7 +4,7 @@
  * Compress a quality value and send it into the arithmetic encoder output stream,
  * with appropriate context information
  */
-void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx){
+void compress_qv(arithStream as, uint32_t x, uint32_t column, uint32_t idx) {
     arithmetic_encoder_step(as->a, as->stats[column][idx], x, as->os);
     update_stats(as->stats[column][idx], x, as->a->r);
 }

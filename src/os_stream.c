@@ -103,6 +103,7 @@ void stream_write_bits(struct os_stream_t *os, uint32_t dw, uint8_t len) {
  * Finishes the current byte in progress and writes the buffer out
  */
 void stream_finish_byte(struct os_stream_t *os) {
+	os->buf[os->bufPos] <<= (7 - os->bitPos);
 	os->bitPos = 0;
 	os->bufPos += 1;
 	stream_write_buffer(os);
