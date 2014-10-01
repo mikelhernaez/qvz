@@ -256,9 +256,9 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 		*lo = generate_quantizer(pmf, dist, 1);
 		*hi = generate_quantizer(pmf, dist, 1);
 		
-		if (verbose) {
-			printf("Optimization targeted zero entropy, 1 state quantizers produced automatically.\n");
-		}
+		//if (verbose) {
+		//	printf("Optimization targeted zero entropy, 1 state quantizers produced automatically.\n");
+		//}
 
 		free_pmf(pmf_temp);
 		return 1.0;
@@ -282,10 +282,10 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 
 	free_pmf(pmf_temp);
 
-	if (verbose) {
-		printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
-		printf("Expected distortion: Low: %f, High: %f.\n", (*lo)->mse, (*hi)->mse);
-	}
+	//if (verbose) {
+	//	printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
+	//	printf("Expected distortion: Low: %f, High: %f.\n", (*lo)->mse, (*hi)->mse);
+	//}
 
 	// Assign ratio based on how we did against our entropy target
 	if (hi_entropy < target)
