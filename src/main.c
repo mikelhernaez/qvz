@@ -19,7 +19,7 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	struct alphabet_t *alphabet = alloc_alphabet(41);
 	uint32_t status;
 	struct hrtimer_t cluster_time, stats, encoding, total;
-	FILE *fout;
+	FILE *fout, *funcompressed = NULL;
 	uint64_t bytes_used;
     double distortion;
 
@@ -67,11 +67,19 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 		perror("Unable to open output file");
 		exit(1);
 	}
+    
+    if (opts->uncompressed) {
+        funcompressed = fopen(opts->uncompressed_name, "w");
+        if (!funcompressed) {
+            perror("Unable to open uncompressed file");
+            exit(1);
+        }
+    }
 	
 	// @todo qv_compression should use quality_file structure with data in memory, now
 	start_timer(&encoding);
 	write_codebooks(fout, &qv_info);
-    bytes_used = start_qv_compression(&qv_info, fout, &distortion);
+    bytes_used = start_qv_compression(&qv_info, fout, &distortion, funcompressed);
 	stop_timer(&encoding);
 	stop_timer(&total);
 
@@ -232,7 +240,9 @@ int main(int argc, char **argv) {
 				break;
             case 'u':
                 opts.uncompressed = 1;
-                i += 1;
+                opts.uncompressed_name = argv[i+1];
+                i += 2;
+                break;
 			default:
 				printf("Unrecognized option -%c.\n", argv[i][1]);
 				usage(argv[0]);
@@ -271,7 +281,7 @@ int main(int argc, char **argv) {
 		encode(input_name, output_name, &opts);
 	}
 
-#ifndef LINUX
+#ifdef _WIN32
 	system("pause");
 #endif
 

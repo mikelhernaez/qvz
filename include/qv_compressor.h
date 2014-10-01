@@ -92,7 +92,7 @@ uint8_t qv_read_cluster(arithStream as);
 
 qv_compressor initialize_qv_compressor(FILE *fout, uint8_t streamDirection, struct quality_file_t *info);
 
-uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *dis);
+uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *dis, FILE *funcompressed);
 void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info);
 
 #endif

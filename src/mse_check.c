@@ -6,7 +6,7 @@ int main( int argc, char **argv){
 	FILE *f1, *f2;
 	char *line1, *line2;
 	int error = 0, i = 0;
-	unsigned int num_lines = 0, columns = 36;
+	unsigned int num_lines = 0, columns = 36, num_lines_total = 500000;
 	double distortion = 0.0;
 
 	line1 = (char*)calloc(4096, 1);
@@ -26,7 +26,7 @@ int main( int argc, char **argv){
 		distortion += error / ( (double)columns);
 		fgets(line1, columns+2, f1);
 		fgets(line2, columns+2, f2);
-	}while (num_lines < 19455048);
+	}while (num_lines < num_lines_total);
 	distortion = distortion / (double)num_lines;
 	printf ("MSE:%f\n", distortion);
 

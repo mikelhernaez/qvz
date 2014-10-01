@@ -31,6 +31,7 @@ struct qv_options_t {
 	uint8_t mode;
 	uint8_t clusters;
     uint8_t uncompressed;
+    char* uncompressed_name;
 	uint32_t training_size;
 	double ratio;		// Used for parameter to all modes
 	double e_dist;		// Expected distortion as calculated during optimization

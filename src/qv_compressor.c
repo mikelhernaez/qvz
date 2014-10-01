@@ -45,7 +45,7 @@ uint8_t qv_read_cluster(arithStream as) {
 /**
  * Compress a sequence of quality scores including dealing with organization by cluster
  */
-uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *dis) {
+uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *dis, FILE * funcompressed) {
     unsigned int osSize = 0;
     
     qv_compressor qvc;
@@ -62,10 +62,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 	uint8_t cluster_id;
 
 	struct line_t *line;
-    
-#ifdef DEBUG
-    FILE *fref = fopen("fref.txt", "wt");
-#endif
+        
     
     // Initialize the compressor
     qvc = initialize_qv_compressor(fout, COMPRESSION, info);
@@ -93,12 +90,14 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 		// Quantize, compress and calculate error simultaneously
 		// Reading in the lines corrects the quality values to alphabet offsets
 		qv = q->q[line->data[0]];
+        
         q_state = get_symbol_index(q->output_alphabet, qv);
         compress_qv(qvc->Quals, q_state, cluster_id, 0, idx);
         
-#ifdef DEBUG
-		fputc(qv+33, fref);
-#endif
+        // @todo use buffer to speed up the writing
+        if (funcompressed != NULL) {
+            fputc(qv+33, funcompressed);
+        }
         
 		// @todo use distortion function
 		error = (line->data[0] - qv)*(line->data[0] - qv);
@@ -109,18 +108,20 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 			qv = q->q[line->data[s]];
             q_state = get_symbol_index(q->output_alphabet, qv);
             
-#ifdef DEBUG
-			fputc(qv+33, fref);
-#endif
+            // @todo use buffer to speed up the writing
+            if (funcompressed != NULL) {
+                fputc(qv+33, funcompressed);
+            }
             
             compress_qv(qvc->Quals, q_state, cluster_id, s, idx);
 			error += (line->data[s] - qv)*(line->data[s] - qv);
             prev_qv = qv;
 		}
         
-#ifdef DEBUG
-       	fputc('\n', fref);
-#endif
+       	// @todo use buffer to speed up the writing
+        if (funcompressed != NULL) {
+            fputc('\n', funcompressed);
+        }
         
         distortion += error / ((double) columns);
 
