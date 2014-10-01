@@ -689,3 +689,20 @@ struct cond_quantizer_list_t *read_codebook(FILE *fp, struct quality_file_t *inf
 
 	return qlist;
 }
+
+/**
+ * Print out a codebook by printing all of the quantizers
+ */
+void print_codebook(struct cond_quantizer_list_t *q) {
+	struct alphabet_t *A;
+	uint32_t j;
+	uint32_t column;
+
+	for (column = 0; column < q->columns; ++column) {
+		A = q->input_alphabets[column];
+		for (j = 0; j < 2*A->size; ++j) {
+			print_quantizer(q->q[column][j]);
+		}
+	}
+}
+

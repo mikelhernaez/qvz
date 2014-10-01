@@ -62,7 +62,6 @@ struct cond_quantizer_list_t {
 	double **ratio;				// Raw ratio
 	uint8_t **qratio;			// Quantized ratio
 	struct qv_options_t *options;
-	struct well_state_t well;
 };
 
 // Memory management
@@ -97,5 +96,7 @@ struct cond_quantizer_list_t *read_codebook(FILE *fp, struct quality_file_t *inf
 #define MAX_CODEBOOK_LINE_LENGTH 3366
 #define COPY_Q_TO_LINE(line, q, i, size) for (i = 0; i < size; ++i) { line[i] = q[i] + 33; }
 #define COPY_Q_FROM_LINE(line, q, i, size) for (i = 0; i < size; ++i) { q[i] = line[i] - 33; }
+
+void print_codebook(struct cond_quantizer_list_t *);
 
 #endif
