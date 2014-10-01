@@ -45,14 +45,14 @@ uint8_t qv_read_cluster(arithStream as) {
 /**
  * Compress a sequence of quality scores including dealing with organization by cluster
  */
-uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *dis, FILE * funcompressed) {
+uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *dis, uint8_t DISTOR, FILE * funcompressed) {
     unsigned int osSize = 0;
     
     qv_compressor qvc;
     
 	uint32_t s = 0, idx = 0, q_state = 0;
 	double distortion = 0.0;
-	uint32_t error = 0;
+	double error = 0.0;
     uint8_t qv = 0, prev_qv = 0;
     uint32_t columns = info->columns;
     struct quantizer_t *q;
@@ -99,8 +99,9 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
             fputc(qv+33, funcompressed);
         }
         
-		// @todo use distortion function
-		error = (line->data[0] - qv)*(line->data[0] - qv);
+        error = compute_distortion(line->data[0], qv, DISTOR);
+		//error = (line->data[0] - qv)*(line->data[0] - qv);
+        
         prev_qv = qv;
         
 		for (s = 1; s < columns; ++s) {
@@ -114,7 +115,8 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
             }
             
             compress_qv(qvc->Quals, q_state, cluster_id, s, idx);
-			error += (line->data[s] - qv)*(line->data[s] - qv);
+            error += compute_distortion(line->data[s], qv, DISTOR);
+			//error += (line->data[s] - qv)*(line->data[s] - qv);
             prev_qv = qv;
 		}
         

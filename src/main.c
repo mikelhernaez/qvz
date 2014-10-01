@@ -15,7 +15,7 @@
  */
 void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	struct quality_file_t qv_info;
-	struct distortion_t *dist = generate_distortion_matrix(41, DISTORTION_MSE);
+	struct distortion_t *dist = generate_distortion_matrix(41, opts->distortion);
 	struct alphabet_t *alphabet = alloc_alphabet(41);
 	uint32_t status;
 	struct hrtimer_t cluster_time, stats, encoding, total;
@@ -79,7 +79,7 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	// @todo qv_compression should use quality_file structure with data in memory, now
 	start_timer(&encoding);
 	write_codebooks(fout, &qv_info);
-    bytes_used = start_qv_compression(&qv_info, fout, &distortion, funcompressed);
+    bytes_used = start_qv_compression(&qv_info, fout, &distortion, opts->distortion, funcompressed);
 	stop_timer(&encoding);
 	stop_timer(&total);
 
@@ -88,7 +88,19 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	// Verbose stats
 	if (opts->verbose) {
 		// @todo add cluster info here
-		printf("Actual distortion: %f\n", distortion);
+        switch (opts->distortion) {
+            case DISTORTION_MANHATTAN:
+                printf("L1 distortion: %f\n", distortion);
+                break;
+            case DISTORTION_MSE:
+                printf("MSE distortion: %f\n", distortion);
+                break;
+            case DISTORTION_LORENTZ:
+                printf("log(1+L1) distortion: %f\n", distortion);
+                break;
+            default:
+                break;
+        }
 		printf("Lines: %llu\n", qv_info.lines);
 		printf("Columns: %u\n", qv_info.columns);
 		printf("Total bytes used: %llu\n", bytes_used);
@@ -142,15 +154,17 @@ void decode(char *input_file, char *output_file, struct qv_options_t *opts) {
 void usage(char *name) {
 	printf("Usage: %s (options) [input file] [output file]\n", name);
 	printf("Options are:\n");
-	printf("\t-q\t\t: Store quality values in compressed file (default)\n");
-	printf("\t-x\t\t: Extract quality values from compressed file\n");
+	printf("\t-q\t\t\t: Store quality values in compressed file (default)\n");
+	printf("\t-x\t\t\t: Extract quality values from compressed file\n");
 	printf("\t-f [ratio]\t: Compress using [ratio] bits per bit of input entropy per symbol\n");
 	printf("\t-r [rate]\t: Compress using fixed [rate] bits per symbol\n");
-	printf("\t-c [#]\t: Compress using [#] clusters (default: 3)\n");
-	printf("\t-h\t\t: Print this help\n");
-	printf("\t-s\t\t: Print summary stats\n");
+    printf("\t-d [M|L|A]\t: Optimize for MSE, Log(1+L1), L1 distortions, respectively (default: MSE)\n");
+	printf("\t-c [#]\t\t: Compress using [#] clusters (default: 3)\n");
+    printf("\t-u [FILE]\t: Write the uncompressed lossy values to FILE (default: off)\n");
+	printf("\t-h\t\t\t: Print this help\n");
+	printf("\t-s\t\t\t: Print summary stats\n");
 	printf("\t-t [lines]\t: Number of lines to use as training set (0 for all, 1000000 default)\n");
-	printf("\t-v\t\t: Enable verbose output\n");
+	printf("\t-v\t\t\t: Enable verbose output\n");
 }
 
 /**
@@ -171,6 +185,7 @@ int main(int argc, char **argv) {
 	opts.ratio = 0.5;
 	opts.clusters = 3;
     opts.uncompressed = 0;
+    opts.distortion = DISTORTION_MSE;
 
 	// No dependency, cross-platform command line parsing means no getopt
 	// So we need to settle for less than optimal flexibility (no combining short opts, maybe that will be added later)
@@ -241,6 +256,23 @@ int main(int argc, char **argv) {
             case 'u':
                 opts.uncompressed = 1;
                 opts.uncompressed_name = argv[i+1];
+                i += 2;
+                break;
+            case 'd':
+                switch (argv[i+1][0]) {
+                    case 'M':
+                        opts.distortion = DISTORTION_MSE;
+                        break;
+                    case 'L':
+                        opts.distortion = DISTORTION_LORENTZ;
+                        break;
+                    case 'A':
+                        opts.distortion = DISTORTION_MANHATTAN;
+                        break;
+                    default:
+                        printf("Distortion measure not supported, using MSE.\n");
+                        break;
+                }
                 i += 2;
                 break;
 			default:

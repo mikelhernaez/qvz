@@ -81,11 +81,27 @@ struct distortion_t *gen_lorentzian_distortion(uint8_t symbols) {
 
 	for (x = 0; x < symbols; ++x) {
 		for (y = 0; y < symbols; ++y) {
-			rtn->distortion[x + y*symbols] = log2(1+abs(x - y));
+			rtn->distortion[x + y*symbols] = log2( 1.0 + (double)(abs(x - y)) );
 		}
 	}
 
 	return rtn;
+}
+
+double compute_distortion(uint32_t x, uint32_t y, uint8_t DIS){
+    
+    switch (DIS) {
+        case DISTORTION_LORENTZ:
+            return log2( 1.0 + (double)(abs(x - y)) );
+        case DISTORTION_MANHATTAN:
+            return abs(x - y);
+        case DISTORTION_MSE:
+            return (x - y)*(x - y);
+            
+        default:
+            printf("DISTORTION NOT RECOGNIZED\n");
+            return 0xffffffff;
+    }
 }
 
 /**
