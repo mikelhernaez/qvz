@@ -67,6 +67,8 @@ arithStream initialize_arithStream(FILE *fout, uint8_t decompressor_flag, struct
     arithStream as;
 	uint32_t i;
 
+	memset(&info->well, 0, sizeof(struct well_state_t));
+
     if (decompressor_flag) {
         fread(info->well.state, sizeof(uint32_t), 32, fout);
     }
