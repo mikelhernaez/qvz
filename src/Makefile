@@ -1,10 +1,8 @@
 # Makefile for building C programs to do encoding, decoding, and clustering
 
-SRC=well.c codebook.c main.c util.c lines.c quantizer.c pmf.c distortion.c qv_stream.c qv_compressor.c arith.c os_stream.c
-CLUSTER_SRC=cluster.c util.c
+SRC=well.c codebook.c main.c util.c lines.c quantizer.c pmf.c distortion.c qv_stream.c qv_compressor.c arith.c os_stream.c cluster.c
 
 OBJ=$(SRC:.c=.o)
-CLUSTER_OBJ=$(CLUSTER_SRC:.c=.o)
 
 CC=gcc
 RM=rm -f
@@ -17,11 +15,8 @@ LDFLAGS=-lc -lm -lrt
 
 all : qvz
 
-cluster : $(CLUSTER_OBJ)
-	$(CC) $(CLUSTER_OBJ) -o cluster $(LDFLAGS)
-
 qvz : $(OBJ)
-	$(CC)  $(OBJ) -o qvz $(LDFLAGS)
+	$(CC) $(OBJ) -o qvz $(LDFLAGS)
 
 debug : CFLAGS += -DDEBUG -ggdb
 debug : qvz

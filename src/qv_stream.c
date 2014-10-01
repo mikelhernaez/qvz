@@ -1,4 +1,3 @@
-#include <assert.h>
 #include "qv_compressor.h"
 
 /**
@@ -34,7 +33,7 @@ stream_stats_ptr_t **initialize_stream_stats(struct cond_quantizer_list_t *q_lis
     stream_stats_ptr_t **s;
     uint32_t i = 0, j = 0, k = 0;
     
-    s = (stream_stats_ptr_t **)calloc(q_list->columns, sizeof(stream_stats_ptr_t *));
+    s = (stream_stats_ptr_t **) calloc(q_list->columns, sizeof(stream_stats_ptr_t *));
 
     // Allocate jagged array, one set of stats per column
     for (i = 0; i < q_list->columns; ++i) {
@@ -61,39 +60,52 @@ stream_stats_ptr_t **initialize_stream_stats(struct cond_quantizer_list_t *q_lis
     return s;
 }
 
-arithStream initialize_arithStream(char *osPath, uint8_t decompressor_flag, struct cond_quantizer_list_t *q_list) {
+/**
+ * @todo add cluster stats
+ */
+arithStream initialize_arithStream(FILE *fout, uint8_t decompressor_flag, struct quality_file_t *info) {
     arithStream as;
-    FILE *fp;
 	uint32_t i;
 
     if (decompressor_flag) {
-		fp = fopen(osPath, "rb");
-        fread(q_list->well.state, sizeof(uint32_t), 32, fp);
+        fread(info->well.state, sizeof(uint32_t), 32, fout);
     }
     else {
-		fp = fopen(osPath, "wb");
-
         // Initialize WELL state vector with libc rand
         srand((uint32_t) time(0));
         for (i = 0; i < 32; ++i) {
 #ifndef DEBUG
-            q_list->well.state[i] = rand();
+            info->well.state[i] = rand();
 #else
-            q_list->well.state[i] = 0x55555555;
+            info->well.state[i] = 0x55555555;
 #endif
         }
         
         // Write the initial WELL state vector to the file first (fixed size of 32 bytes)
 		// @todo strictly this needs to be stored in network order because we're interpreting it as a 32 bit int
 		// but I am a bit too lazy for that right now
-        fwrite(q_list->well.state, sizeof(uint32_t), 32, fp);
+        fwrite(info->well.state, sizeof(uint32_t), 32, fout);
 	}
+
+	// Must start at zero
+	info->well.n = 0;
     
     as = (arithStream) calloc(1, sizeof(struct arithStream_t));
-    as->stats = initialize_stream_stats(q_list);
-    as->a = initialize_arithmetic_encoder(m_arith);
-    //as->os = initialize_osStream(1, fp, NULL, decompressor_flag);
-	as->os = alloc_os_stream(fp, decompressor_flag);
+
+	as->cluster_stats = (stream_stats_ptr_t) calloc(1, sizeof(struct stream_stats_t));
+	as->cluster_stats->step = 8;
+	as->cluster_stats->counts = (uint32_t *) calloc(info->cluster_count, sizeof(uint32_t));
+	as->cluster_stats->alphabetCard = info->cluster_count;
+	as->cluster_stats->n = info->cluster_count;
+
+	as->stats = (stream_stats_ptr_t ***) calloc(info->cluster_count, sizeof(stream_stats_ptr_t **));
+	for (i = 0; i < info->cluster_count; ++i) {
+    	as->stats[i] = initialize_stream_stats(info->clusters->clusters[i].qlist);
+		as->cluster_stats->counts[i] = 1;
+	}
+    
+	as->a = initialize_arithmetic_encoder(m_arith);
+	as->os = alloc_os_stream(fout, decompressor_flag);
 
 	if (decompressor_flag)
 		as->a->t = stream_read_bits(as->os, as->a->m);
@@ -103,9 +115,9 @@ arithStream initialize_arithStream(char *osPath, uint8_t decompressor_flag, stru
     return as;
 }
 
-qv_compressor initialize_qv_compressor(char *osPath, uint8_t streamDirection, struct cond_quantizer_list_t *q_list) {
+qv_compressor initialize_qv_compressor(FILE *fout, uint8_t streamDirection, struct quality_file_t *info) {
     qv_compressor s;
     s = calloc(1, sizeof(struct qv_compressor_t));
-    s->Quals = initialize_arithStream(osPath, streamDirection, q_list);
+    s->Quals = initialize_arithStream(fout, streamDirection, info);
     return s;
 }

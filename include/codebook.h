@@ -7,6 +7,8 @@
 
 #include "util.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -27,6 +29,7 @@ struct qv_options_t {
 	uint8_t verbose;
 	uint8_t stats;
 	uint8_t mode;
+	uint8_t clusters;
 	uint32_t training_size;
 	double ratio;		// Used for parameter to all modes
 	double e_dist;		// Expected distortion as calculated during optimization
@@ -65,7 +68,7 @@ struct cond_quantizer_list_t {
 // Memory management
 struct cond_pmf_list_t *alloc_conditional_pmf_list(const struct alphabet_t *alphabet, uint32_t columns);
 struct cond_quantizer_list_t *alloc_conditional_quantizer_list(uint32_t columns);
-void free_cond_pmf_list(struct cond_pmf_list_t *);
+void free_conditional_pmf_list(struct cond_pmf_list_t *);
 void free_cond_quantizer_list(struct cond_quantizer_list_t *);
 
 // Per-column initializer for conditional quantizer list
@@ -77,17 +80,19 @@ struct quantizer_t *get_cond_quantizer_indexed(struct cond_quantizer_list_t *lis
 struct quantizer_t *get_cond_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 void store_cond_quantizers(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev);
 void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quantizer_t *restrict hi, double ratio, struct cond_quantizer_list_t *list, uint32_t column, uint32_t index);
-struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev, uint32_t *q_idx);
+struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, struct well_state_t *well, uint32_t column, symbol_t prev, uint32_t *q_idx);
 uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 
 // Meat of the implementation
-void calculate_statistics(struct quality_file_t *, struct cond_pmf_list_t *);
+void calculate_statistics(struct quality_file_t *);
 double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi, uint8_t verbose);
-struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, struct qv_options_t *opts);
+void generate_codebooks(struct quality_file_t *info);
 
-// Master function to read a codebook from a file
-void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers);
-struct cond_quantizer_list_t *read_codebook(const char *filename, const struct alphabet_t *A);
+// Master functions to handle codebooks in the output file
+void write_codebooks(FILE *fp, struct quality_file_t *info);
+void write_codebook(FILE *fp, struct cond_quantizer_list_t *quantizers);
+void read_codebooks(FILE *fp, struct quality_file_t *info);
+struct cond_quantizer_list_t *read_codebook(FILE *fp, struct quality_file_t *info);
 
 #define MAX_CODEBOOK_LINE_LENGTH 3366
 #define COPY_Q_TO_LINE(line, q, i, size) for (i = 0; i < size; ++i) { line[i] = q[i] + 33; }

@@ -1,5 +1,6 @@
 #include "codebook.h"
 #include "lines.h"
+#include "cluster.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -158,10 +159,10 @@ void store_cond_quantizers_indexed(struct quantizer_t *restrict lo, struct quant
 /**
  * Selects a quantizer for the given column from the quantizer list with the appropriate ratio
  */
-struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, uint32_t column, symbol_t prev, uint32_t *q_idx) {
+struct quantizer_t *choose_quantizer(struct cond_quantizer_list_t *list, struct well_state_t *well, uint32_t column, symbol_t prev, uint32_t *q_idx) {
 	uint32_t idx = get_symbol_index(list->input_alphabets[column], prev);
 	assert(idx != ALPHABET_SYMBOL_NOT_FOUND);
-	if (well_1024a_bits(&list->well, 7) >= list->qratio[column][idx]) {
+	if (well_1024a_bits(well, 7) >= list->qratio[column][idx]) {
         *q_idx = 2*idx+1;
 		return list->q[column][2*idx+1];
 	}
@@ -178,31 +179,36 @@ uint32_t find_state_encoding(struct quantizer_t *q, symbol_t value) {
 }
 
 /**
- * Given a quality info struct, which is assumed to have loaded the training set, and a
- * set of output conditional pmf structures, calculate the statistics of the data
+ * Calculates the statistics, producing a conditional pmf list per cluster and storing
+ * it directly inside the cluster in question
  */
-void calculate_statistics(struct quality_file_t *info, struct cond_pmf_list_t *pmf_list) {
-	uint32_t block_idx, line_idx, column;
-	uint32_t j;
+void calculate_statistics(struct quality_file_t *info) {
+	uint32_t line_idx, column;
+	uint32_t j, c;
 	struct line_t *line;
+	struct cluster_t *cluster;
+	struct cond_pmf_list_t *pmf_list;
 
-	// Calculate all conditional PMFs
-	for (block_idx = 0; block_idx < info->block_count; ++block_idx) {
-		for (line_idx = 0; line_idx < info->blocks[block_idx].count; ++line_idx) {
-			line = &info->blocks[block_idx].lines[line_idx];
+	for (c = 0; c < info->cluster_count; ++c) {
+		cluster = &info->clusters->clusters[c];
+		pmf_list = cluster->training_stats;
+
+		// First, find conditional PMFs
+		for (line_idx = 0; line_idx < cluster->count; ++line_idx) {
+			line = cluster->members[line_idx];
 			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line->data[0]);
 			for (column = 1; column < info->columns; ++column) {
 				pmf_increment(get_cond_pmf(pmf_list, column, line->data[column-1]), line->data[column]);
 			}
 		}
-	}
 
-	// Calculate unconditional PMFs afterwards
-	pmf_list->marginal_pmfs = alloc_pmf_list(info->columns, pmf_list->alphabet);
-	combine_pmfs(get_cond_pmf(pmf_list, 0, 0), pmf_list->marginal_pmfs->pmfs[0], 1.0, 0.0, pmf_list->marginal_pmfs->pmfs[0]);
-	for (column = 1; column < info->columns; ++column) {
-		for (j = 0; j < pmf_list->alphabet->size; ++j) {
-			combine_pmfs(pmf_list->marginal_pmfs->pmfs[column], get_cond_pmf(pmf_list, column, j), 1.0, get_probability(pmf_list->marginal_pmfs->pmfs[column-1], j), pmf_list->marginal_pmfs->pmfs[column]);
+		// Then find unconditional PMFs
+		pmf_list->marginal_pmfs = alloc_pmf_list(info->columns, pmf_list->alphabet);
+		combine_pmfs(get_cond_pmf(pmf_list, 0, 0), pmf_list->marginal_pmfs->pmfs[0], 1.0, 0.0, pmf_list->marginal_pmfs->pmfs[0]);
+		for (column = 1; column < info->columns; ++column) {
+			for (j = 0; j < pmf_list->alphabet->size; ++j) {
+				combine_pmfs(pmf_list->marginal_pmfs->pmfs[column], get_cond_pmf(pmf_list, column, j), 1.0, get_probability(pmf_list->marginal_pmfs->pmfs[column-1], j), pmf_list->marginal_pmfs->pmfs[column]);
+			}
 		}
 	}
 }
@@ -298,9 +304,7 @@ void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, 
     uint32_t q_symbol, idx;
     
     for (x = 0; x < q_lo->alphabet->size; x++) {
-        
         for (idx = 0; idx < q_output_union->size; idx++) {
-        
             q_symbol = q_output_union->symbols[idx];
             
             if (q_lo->q[x] == q_symbol)
@@ -309,10 +313,7 @@ void compute_qpmf_quan_list(struct quantizer_t *q_lo, struct quantizer_t *q_hi, 
             if (q_hi->q[x] == q_symbol)
                 q_x_pmf->pmfs[x]->pmf[idx] += (1-ratio);
         }
-        
     }
-    
-    
 }
 
 void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_pmfs, uint32_t column, struct pmf_list_t *prev_qpmf_list, struct alphabet_t * q_alphabet_union, struct alphabet_t * prev_q_alphabet_union, struct cond_quantizer_list_t *q_list) {
@@ -354,7 +355,6 @@ void compute_qpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
         qpmf_list->pmfs[k]->pmf_ready = 1;
         renormalize_pmf(qpmf_list->pmfs[k]);
     }
-    
 }
 
 void compute_xpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_pmfs, uint32_t column, struct pmf_list_t *xpmf_list, struct alphabet_t * q_alphabet_union){
@@ -374,14 +374,13 @@ void compute_xpmf_list(struct pmf_list_t *qpmf_list, struct cond_pmf_list_t *in_
         xpmf_list->pmfs[idx]->pmf_ready = 1;
         renormalize_pmf(xpmf_list->pmfs[idx]);
     }
-    
 }
 
 /**
- * Given the statistics calculated before, we need to compute the entire codebook's worth of
- * quantizers, as well as all of the PMFs and related stats
+ * For a set of already clustered data, generate codebooks for each cluster and
+ * store them inside the cluster data structure
  */
-struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, struct cond_pmf_list_t *in_pmfs, struct distortion_t *dist, struct qv_options_t *opts) {
+void generate_codebooks(struct quality_file_t *info) {
 	// Stuff for state allocation and mixing
 	double ratio;
     
@@ -390,10 +389,10 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	double total_mse;
     
 	// Output list of conditional quantizers
-	struct cond_quantizer_list_t *q_list = alloc_conditional_quantizer_list(info->columns);
+	struct cond_quantizer_list_t *q_list;
     
 	// Constant alphabet of all possible input symbols
-	const struct alphabet_t *A = in_pmfs->alphabet;
+	const struct alphabet_t *A = info->alphabet;
     
 	// Temporary/extra pointers
 	struct quantizer_t *q_lo;
@@ -409,135 +408,142 @@ struct cond_quantizer_list_t *generate_codebooks(struct quality_file_t *info, st
 	// Alphabet of all possible quantizer outputs from the previous column
 	struct alphabet_t *q_output_union;
     struct alphabet_t *q_prev_output_union;
-    
-    // Compute some statistics over the unquantized input
-    calculate_statistics(info, in_pmfs);
-    
-    // For the column 0 the quantizers aren't conditional, so find them directly
-    q_output_union = alloc_alphabet(1);
-    cond_quantizer_init_column(q_list, 0, q_output_union);
-	q_list->options = opts;
-    
-    // Initialize the new pmfs (dummy)
-    qpmf_list = alloc_pmf_list(A->size, q_output_union);
-    xpmf_list = alloc_pmf_list(q_output_union->size, A);
-    
-    // Handle column zero specially
-	ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*opts->ratio, &q_lo, &q_hi, opts->verbose);
-	q_lo->ratio = ratio;
-	q_hi->ratio = 1-ratio;
-	total_mse = ratio*q_lo->mse + (1-ratio)*q_hi->mse;
-    store_cond_quantizers(q_lo, q_hi, ratio, q_list, 0, 0);
-    
-    // free the used pmfs and alphabet
-    // (do not free q_prev_output_union and prev_qpmf_output as it's the first assignment).
-    q_prev_output_union = q_output_union;
-    prev_qpmf_list = qpmf_list;
-    free_pmf_list(xpmf_list);
-    
-    // Start computing the quantizers of the rest of the columns
-    for (column = 1; column < info->columns; column++) {
-        // Compute the next output alphabet union over all quantizers for this column
-		q_output_union = duplicate_alphabet(get_cond_quantizer_indexed(q_list, column-1, 0)->output_alphabet);
-		for (j = 1; j < 2*q_prev_output_union->size; ++j) {
-			alphabet_union(q_output_union, get_cond_quantizer_indexed(q_list, column-1, j)->output_alphabet, q_output_union);
-		}
-        cond_quantizer_init_column(q_list, column, q_output_union);
-        
-        // Initialize the new pmfs
-        qpmf_list = alloc_pmf_list(A->size, q_output_union);
-        xpmf_list = alloc_pmf_list(q_output_union->size, A);
-        
-        // Compute P(Q_i|X_i)
-        if (column == 1)
-            compute_qpmf_quan_list(q_lo, q_hi, qpmf_list, ratio, q_output_union);
-        else
-            compute_qpmf_list(qpmf_list, in_pmfs, column, prev_qpmf_list, q_output_union, q_prev_output_union, q_list);
-        
-        // Compute P(X_{i+1}|Q_i)
-        compute_xpmf_list(qpmf_list, in_pmfs, column, xpmf_list, q_output_union);
-        
-        // for each previous value Q_i compute the quantizers
-        for (j = 0; j < q_output_union->size; ++j) {
-            // Find and save quantizers
-			ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*opts->ratio, &q_lo, &q_hi, opts->verbose);
-			q_lo->ratio = ratio;
-			q_hi->ratio = 1-ratio;
-            store_cond_quantizers_indexed(q_lo, q_hi, ratio, q_list, column, j);
 
-			// This actually needs to be scaled by the probability of this quantizer pair being used to be accurate, uniform assumption is an approximation
-			total_mse += (ratio*q_lo->mse + (1-ratio)*q_hi->mse) / q_output_union->size;
+	uint8_t cluster_id;
+	struct cond_pmf_list_t *in_pmfs;
+	struct qv_options_t *opts = info->opts;
+	struct distortion_t *dist = info->dist;
+
+	for (cluster_id = 0; cluster_id < info->cluster_count; ++cluster_id) {
+		q_list = alloc_conditional_quantizer_list(info->columns);
+		info->clusters->clusters[cluster_id].qlist = q_list;
+		in_pmfs = info->clusters->clusters[cluster_id].training_stats;
+    
+    	// For the column 0 the quantizers aren't conditional, so find them directly
+    	q_output_union = alloc_alphabet(1);
+    	cond_quantizer_init_column(q_list, 0, q_output_union);
+		q_list->options = opts;
+    
+    	// Initialize the new pmfs (dummy)
+    	qpmf_list = alloc_pmf_list(A->size, q_output_union);
+    
+    	// Handle column zero specially
+		ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*opts->ratio, &q_lo, &q_hi, opts->verbose);
+		q_lo->ratio = ratio;
+		q_hi->ratio = 1-ratio;
+		total_mse = ratio*q_lo->mse + (1-ratio)*q_hi->mse;
+    	store_cond_quantizers(q_lo, q_hi, ratio, q_list, 0, 0);
+    
+    	// free the used pmfs and alphabet
+    	// (do not free q_prev_output_union and prev_qpmf_output as it's the first assignment).
+    	q_prev_output_union = q_output_union;
+    	prev_qpmf_list = qpmf_list;
+    
+    	// Start computing the quantizers of the rest of the columns
+    	for (column = 1; column < info->columns; column++) {
+        	// Compute the next output alphabet union over all quantizers for this column
+			q_output_union = duplicate_alphabet(get_cond_quantizer_indexed(q_list, column-1, 0)->output_alphabet);
+			for (j = 1; j < 2*q_prev_output_union->size; ++j) {
+				alphabet_union(q_output_union, get_cond_quantizer_indexed(q_list, column-1, j)->output_alphabet, q_output_union);
+			}
+        	cond_quantizer_init_column(q_list, column, q_output_union);
+        	
+        	// Initialize the new pmfs
+        	qpmf_list = alloc_pmf_list(A->size, q_output_union);
+        	xpmf_list = alloc_pmf_list(q_output_union->size, A);
+        
+        	// Compute P(Q_i|X_i)
+        	if (column == 1)
+        	    compute_qpmf_quan_list(q_lo, q_hi, qpmf_list, ratio, q_output_union);
+        	else
+        	    compute_qpmf_list(qpmf_list, in_pmfs, column, prev_qpmf_list, q_output_union, q_prev_output_union, q_list);
+        	
+        	// Compute P(X_{i+1}|Q_i)
+        	compute_xpmf_list(qpmf_list, in_pmfs, column, xpmf_list, q_output_union);
+        
+        	// for each previous value Q_i compute the quantizers
+        	for (j = 0; j < q_output_union->size; ++j) {
+        	    // Find and save quantizers
+				ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*opts->ratio, &q_lo, &q_hi, opts->verbose);
+				q_lo->ratio = ratio;
+				q_hi->ratio = 1-ratio;
+        	    store_cond_quantizers_indexed(q_lo, q_hi, ratio, q_list, column, j);
+
+				// This actually needs to be scaled by the probability of this quantizer pair being used to be accurate, uniform assumption is an approximation
+				total_mse += (ratio*q_lo->mse + (1-ratio)*q_hi->mse) / q_output_union->size;
 			
-        }
+        	}
         
-        // deallocated the memory of the used pmfs and alphabet
-        free(q_prev_output_union);
-        q_prev_output_union = q_output_union;
-        
-        free_pmf_list(prev_qpmf_list);
-		prev_qpmf_list = qpmf_list;
-        
-        free_pmf_list(xpmf_list);
+        	// deallocated the memory of the used pmfs and alphabet
+        	free(q_prev_output_union);
+        	q_prev_output_union = q_output_union;
+	        free_pmf_list(prev_qpmf_list);
+			prev_qpmf_list = qpmf_list;
+	        free_pmf_list(xpmf_list);
+	
+    	}
+    	
+		// Final cleanup, things we saved at the end of the final iteration that aren't needed
+		free_pmf_list(qpmf_list);
+    	free(q_output_union);
+	}
+}
 
-    }
-    
-	// Final cleanup, things we saved at the end of the final iteration that aren't needed
-	free_pmf_list(qpmf_list);
-    free(q_output_union);
-    
-	opts->e_dist = total_mse / in_pmfs->columns;
+/**
+ * Writes all of the codebooks for the set of quantizers given, along with necessary
+ * metadata (columns, lines, cluster counts) first
+ */
+void write_codebooks(FILE *fp, struct quality_file_t *info) {
+	uint32_t columns, lines;
+	uint32_t j;
+	char linebuf[1];
 
-	return q_list;
+	// Header line is number of clusters (1 byte)
+	// number of columns (4), total number of lines (4), then a newline
+	columns = htonl(info->columns);
+	lines = htonl((uint32_t)info->lines);
+	linebuf[0] = info->cluster_count;
+	fwrite(linebuf, sizeof(char), 1, fp);
+	fwrite(&columns, sizeof(uint32_t), 1, fp);
+	fwrite(&lines, sizeof(uint32_t), 1, fp);
+
+	// Now, write each cluster's codebook in order
+	for (j = 0; j < info->cluster_count; ++j) {
+		write_codebook(fp, info->clusters->clusters[j].qlist);
+	}
 }
 
 /**
  * Writes a codebook to a file that will be used by the decoder to initialize the arithmetic decoder
  * identically to how it was set up during encoding. The format for the file is:
- * Line 1: Four bytes in network order indicating number of columns per read, then four bytes for number of lines
- * Line 2: 1 byte ratio offset by 33 to be human readable
- * Line 3: 1 byte per quantizer symbol for column 0, low
- * Line 4: 1 byte per quantizer symbol for column 0, high
- * Lines (2+3j, 3+3j, 4+3j):
+ * Line 1: 1 byte ratio offset by 33 to be human readable
+ * Line 2: 1 byte per quantizer symbol for column 0, low
+ * Line 3: 1 byte per quantizer symbol for column 0, high
+ * Lines (1+3j, 2+3j, 3+3j):
  *  1: 1 byte per ratio per unique output of previous column
  *  2: 1 byte per quantizer symbol for each low quantizer in order of symbols in previous column
  *  3: 1 byte per quantizer symbol for each high quantizer in order of symbols in previous column
  */
-void write_codebook(const char *filename, struct cond_quantizer_list_t *quantizers) {
-	FILE *fp;
+void write_codebook(FILE *fp, struct cond_quantizer_list_t *quantizers) {
 	uint32_t i, j, k;
 	uint32_t columns = quantizers->columns;
-	uint32_t lines;
 	struct quantizer_t *q_temp = get_cond_quantizer_indexed(quantizers, 0, 0);
 	uint32_t size = q_temp->alphabet->size;
 	uint32_t buflen = columns > size ? columns : size;
 	char *eol = "\n";
 	char *linebuf = (char *) _alloca(sizeof(char)*buflen);
 
-	fp = fopen(filename, "wt");
-	if (!fp) {
-		perror("Unable to open codebook file");
-		exit(1);
-	}
-
-	// First line, number of columns and lines
-	columns = htonl(columns);
-	lines = htonl(quantizers->lines);
-	fwrite(&columns, sizeof(uint32_t), 1, fp);
-	fwrite(&lines, sizeof(uint32_t), 1, fp);
-	fwrite(eol, sizeof(char), 1, fp);
-	columns = ntohl(columns);
-
-	// Second line, ratio for zero context quantizer
+	// First line, ratio for zero context quantizer
 	linebuf[0] = quantizers->qratio[0][0] + 33;
 	linebuf[1] = eol[0];
 	fwrite(linebuf, sizeof(char), 2, fp);
 
-	// Third line is low quantizer
+	// Second line is low quantizer
 	COPY_Q_TO_LINE(linebuf, q_temp->q, i, size);
 	fwrite(linebuf, sizeof(char), size, fp);
 	fwrite(eol, sizeof(char), 1, fp);
 
-	// Fourth line is high quantizer
+	// Third line is high quantizer
 	q_temp = get_cond_quantizer_indexed(quantizers, 0, 1);
 	COPY_Q_TO_LINE(linebuf, q_temp->q, i, size);
 	fwrite(linebuf, sizeof(char), size, fp);
@@ -568,17 +574,38 @@ void write_codebook(const char *filename, struct cond_quantizer_list_t *quantize
 		}
 		fwrite(eol, sizeof(char), 1, fp);
 	}
-
-	fclose(fp);
 }
 
 /**
- * Reads in the codebook in the specified filename, calculates how many columns it is configured
- * for, and prepares the codebook list structure necessary to use for encoding with it
+ * Reads in all of the codebooks for the clusters from the given file
  */
-struct cond_quantizer_list_t *read_codebook(const char *filename, const struct alphabet_t *A) {
-	FILE *fp;
-	uint32_t columns, lines;
+void read_codebooks(FILE *fp, struct quality_file_t *info) {
+	uint8_t j;
+	char line[9];
+
+	// Figure out how many clusters we have to set up cluster sizes
+	fread(line, sizeof(char), 9, fp);
+	info->cluster_count = line[0];
+
+	// Recover columns and lines as 32 bit integers
+	info->columns = (line[1] & 0xff) | ((line[2] << 8) & 0xff00) | ((line[3] << 16) & 0xff0000) | ((line[4] << 24) & 0xff000000);
+	info->columns = ntohl(info->columns);
+	info->lines = (line[5] & 0xff) | ((line[6] << 8) & 0xff00) | ((line[7] << 16) & 0xff0000) | ((line[8] << 24) & 0xff000000);
+	info->lines = ntohl(info->lines);
+	
+	// Can't allocate clusters until we know how many columns there are
+	info->clusters = alloc_cluster_list(info);
+
+	// Read codebooks in order
+	for (j = 0; j < info->cluster_count; ++j) {
+		info->clusters->clusters[j].qlist = read_codebook(fp, info);
+	}
+}
+
+/**
+ * Reads a single codebook and sets up the quantizer list
+ */
+struct cond_quantizer_list_t *read_codebook(FILE *fp, struct quality_file_t *info) {
 	uint32_t column, size;
 	uint32_t i, j;
 	struct quantizer_t *q_lo, *q_hi;
@@ -586,22 +613,12 @@ struct cond_quantizer_list_t *read_codebook(const char *filename, const struct a
 	struct alphabet_t *uniques;
 	char line[MAX_CODEBOOK_LINE_LENGTH];
 	uint8_t qratio;
+	struct alphabet_t *A = info->alphabet;
+	uint32_t columns = info->columns;
 
-	fp = fopen(filename, "rt");
-	if (!fp) {
-		perror("Unable to open codebook file");
-		exit(1);
-	}
-
-	// First line stores the number of columns in network order as a 4 byte integer
-	fgets(line, MAX_CODEBOOK_LINE_LENGTH, fp);
-	columns = (line[0] & 0xff) | ((line[1] << 8) & 0xff00) | ((line[2] << 16) & 0xff0000) | ((line[3] << 24) & 0xff000000);
-	columns = ntohl(columns);
-	lines = (line[4] & 0xff) | ((line[5] << 8) & 0xff00) | ((line[6] << 16) & 0xff0000) | ((line[7] << 24) & 0xff000000);
-	qlist = alloc_conditional_quantizer_list(columns);
 	uniques = alloc_alphabet(1);
+	qlist = alloc_conditional_quantizer_list(info->columns);
 	cond_quantizer_init_column(qlist, 0, uniques);
-	qlist->lines = ntohl(lines);
 	free_alphabet(uniques);
 
 	// Next line is qratio for zero quantizer offset by 33

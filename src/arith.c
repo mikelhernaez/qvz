@@ -111,7 +111,6 @@ int encoder_last_step(Arithmetic_code a, osStream os) {
     // write the rest of the tag (l)
 	stream_write_bits(os, a->l, a->m - 1);
 	stream_finish_byte(os);
-    fclose(os->fp);
     
     return os->written;
 }
