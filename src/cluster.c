@@ -77,24 +77,37 @@ uint8_t cluster_lines(struct line_block_t *block, struct quality_file_t *info) {
  * Updates the cluster means based on their assigned lines. Also clears the line count for
  * the next iteration.
  */
-void recalculate_means(struct quality_file_t *info) {
+double recalculate_means(struct quality_file_t *info) {
 	uint8_t i;
+	double moved, move_max = 0.0;
 
 	for (i = 0; i < info->cluster_count; ++i) {
-		calculate_cluster_mean(&info->clusters->clusters[i], info);
+		moved = calculate_cluster_mean(&info->clusters->clusters[i], info);
+		if (moved > move_max)
+			move_max = moved;
+
+		if (info->opts->verbose) {
+			printf("Cluster %d moved %f.\n", i, moved);
+		}
 	}
+
+	return move_max;
 }
 
 /**
  * Calculates the mean for a cluster.
  */
-void calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *info) {
+double calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *info) {
 	struct line_t *line;
 	uint32_t i, j;
+	double rtn, dist;
+	struct line_t old_mean;
 	uint64_t *accumulator = (uint64_t *) _alloca(info->columns*sizeof(uint64_t));
+	old_mean.data = (uint8_t *) _alloca(info->columns*sizeof(uint8_t));
 
 	// Clear previous
 	memset(accumulator, 0, info->columns*sizeof(uint64_t));
+	memcpy(old_mean.data, cluster->mean.data, info->columns*sizeof(uint8_t));
 
 	// Sum up everything column-wise
 	for (i = 0; i < cluster->count; ++i) {
@@ -104,10 +117,17 @@ void calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *in
 		}
 	}
 
-	// Integer division to find the mean, guaranteed to be less than the alphabet size
+	rtn = 0;
 	for (j = 0; j < info->columns; ++j) {
+		// Integer division to find the mean, guaranteed to be less than the alphabet size
 		cluster->mean.data[j] = (uint8_t) (accumulator[j] / cluster->count);
+		
+		// Also figure out how far we've moved
+		dist = cluster->mean.data[j] - old_mean.data[j];
+		rtn += dist*dist;
 	}
+
+	return rtn;
 }
 
 /**
@@ -192,26 +212,30 @@ void initialize_kmeans_clustering(struct quality_file_t *info) {
  */
 void do_kmeans_clustering(struct quality_file_t *info) {
 	uint32_t iter_count = 0;
-	uint8_t changed = 1;
 	uint32_t j;
+	uint8_t loop = 1;
+	double moved;
 	struct cluster_list_t *clusters = info->clusters;
 
 	initialize_kmeans_clustering(info);
 
-	while (iter_count < MAX_KMEANS_ITERATIONS && changed) {
+	while (iter_count < MAX_KMEANS_ITERATIONS && loop) {
 		for (j = 0; j < clusters->count; ++j) {
 			clusters->clusters[j].count = 0;
 		}
 
-		changed = 0;
 		for (j = 0; j < info->block_count; ++j) {
-			changed |= cluster_lines(&info->blocks[j], info);
+			cluster_lines(&info->blocks[j], info);
 		}
 
-		recalculate_means(info);
+		loop = 0;
+		moved = recalculate_means(info);
+		if (moved > info->opts->cluster_threshold)
+			loop = 1;
+
 		iter_count += 1;
 		if (info->opts->verbose) {
-			printf(".");
+			printf("\n");
 		}
 	}
 

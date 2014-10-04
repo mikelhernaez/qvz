@@ -14,8 +14,8 @@ void free_cluster_list(struct cluster_list_t *);
 
 // Clustering algorithm internals
 uint8_t cluster_lines(struct line_block_t *block, struct quality_file_t *info);
-void recalculate_means(struct quality_file_t *info);
-void calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *info);
+double recalculate_means(struct quality_file_t *info);
+double calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *info);
 uint8_t do_cluster_assignment(struct line_t *line, struct quality_file_t *info);
 uint8_t assign_cluster(struct line_t *line, struct quality_file_t *info);
 void find_distance(struct line_t *line, struct cluster_t *cluster, struct quality_file_t *t);

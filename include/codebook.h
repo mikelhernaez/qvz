@@ -36,6 +36,7 @@ struct qv_options_t {
 	uint32_t training_size;
 	double ratio;		// Used for parameter to all modes
 	double e_dist;		// Expected distortion as calculated during optimization
+	double cluster_threshold;
 };
 
 /**

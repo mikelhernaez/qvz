@@ -159,7 +159,8 @@ void usage(char *name) {
 	printf("\t-f [ratio]\t: Compress using [ratio] bits per bit of input entropy per symbol\n");
 	printf("\t-r [rate]\t: Compress using fixed [rate] bits per symbol\n");
     printf("\t-d [M|L|A]\t: Optimize for MSE, Log(1+L1), L1 distortions, respectively (default: MSE)\n");
-	printf("\t-c [#]\t\t: Compress using [#] clusters (default: 3)\n");
+	printf("\t-c [#]\t\t: Compress using [#] clusters (default: 1)\n");
+	printf("\t-T [#]\t\t: Use [#] as a threshold for cluster center movement (L2 norm) to declare a stable solution (default: 4).\n");
     printf("\t-u [FILE]\t: Write the uncompressed lossy values to FILE (default: off)\n");
 	printf("\t-h\t\t\t: Print this help\n");
 	printf("\t-s\t\t\t: Print summary stats\n");
@@ -183,9 +184,10 @@ int main(int argc, char **argv) {
 	opts.verbose = 0;
 	opts.stats = 0;
 	opts.ratio = 0.5;
-	opts.clusters = 3;
+	opts.clusters = 1;
     opts.uncompressed = 0;
     opts.distortion = DISTORTION_MSE;
+	opts.cluster_threshold = 4;
 
 	// No dependency, cross-platform command line parsing means no getopt
 	// So we need to settle for less than optimal flexibility (no combining short opts, maybe that will be added later)
@@ -258,6 +260,10 @@ int main(int argc, char **argv) {
                 opts.uncompressed_name = argv[i+1];
                 i += 2;
                 break;
+			case 'T':
+				opts.cluster_threshold = atoi(argv[i+1]);
+				i += 2;
+				break;
             case 'd':
                 switch (argv[i+1][0]) {
                     case 'M':
@@ -301,7 +307,7 @@ int main(int argc, char **argv) {
 			else if (opts.mode == MODE_FIXED_MSE)
 				printf("Fixed-MSE mode selected, targeting %f average MSE per context\n", opts.ratio);
 
-			printf("Compression will use %d clusters\n", opts.clusters);
+			printf("Compression will use %d clusters, with a movement threshold of %.0f\n", opts.clusters, opts.cluster_threshold);
 			// @todo other modes?
 		}
 	}
