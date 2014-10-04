@@ -88,7 +88,7 @@ uint32_t find_state_encoding(struct quantizer_t *codebook, symbol_t value);
 
 // Meat of the implementation
 void calculate_statistics(struct quality_file_t *);
-double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi, uint8_t verbose);
+double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi);
 void generate_codebooks(struct quality_file_t *info);
 
 // Master functions to handle codebooks in the output file

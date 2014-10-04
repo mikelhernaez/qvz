@@ -214,31 +214,6 @@ void calculate_statistics(struct quality_file_t *info) {
 }
 
 /**
- * Does state calculation, producing hi, lo, and ratio, for the given entropy value
- * @param entropy The entropy to use for state calculation
- * @param high Output, number of hi states stored here
- * @param low Output, number of lo states stored here
- * @param ratio Output, ratio between hi and lo to use
- * @deprecated as we now optimally match states to entropy
-void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
-	double h_hi, h_lo;
-
-	// H = rH_lo + (1-r)H_hi
-	// H - H_hi = r(H_lo - H_hi)
-	// r = (H - H_hi) / (H_lo - H_hi)
-	h_lo = pow(2.0, entropy);
-	*low = (uint32_t) h_lo;
-	*high = (uint32_t) ceil(h_lo);
-	h_lo = log2((double)*low);
-	h_hi = log2((double)*high);
-	if (h_lo - h_hi == 0)
-		*ratio = 0.0;
-	else
-		*ratio = (entropy - h_hi) / (h_lo - h_hi);
-}
-*/
-
-/**
  * Searches (linearly) for the pair of quantizers that surround the target entropy by guessing and checking the number of states
  * @param pmf The pmf that is to be quantized
  * @param dist The distortion metric to quantize against
@@ -246,7 +221,7 @@ void find_states(double entropy, uint32_t *high, uint32_t *low, double *ratio) {
  * @param hi Place to store the pointer to the high quantizer
  * @return double The ratio necessary to combine these two quantizers to achieve the target
  */
-double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi, uint8_t verbose) {
+double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double target, struct quantizer_t **lo, struct quantizer_t **hi) {
 	struct quantizer_t *q_temp;
 	double lo_entropy, hi_entropy;
 	struct pmf_t *pmf_temp = alloc_pmf(pmf->alphabet);
@@ -256,10 +231,6 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 		*lo = generate_quantizer(pmf, dist, 1);
 		*hi = generate_quantizer(pmf, dist, 1);
 		
-		//if (verbose) {
-		//	printf("Optimization targeted zero entropy, 1 state quantizers produced automatically.\n");
-		//}
-
 		free_pmf(pmf_temp);
 		return 1.0;
 	}
@@ -281,11 +252,6 @@ double optimize_for_entropy(struct pmf_t *pmf, struct distortion_t *dist, double
 	} while (hi_entropy < target && states < pmf->alphabet->size);
 
 	free_pmf(pmf_temp);
-
-	//if (verbose) {
-	//	printf("Optimization results: hi states: %d; H_lo: %f, H_hi: %f, target: %f.\n", states, lo_entropy, hi_entropy, target);
-	//	printf("Expected distortion: Low: %f, High: %f.\n", (*lo)->mse, (*hi)->mse);
-	//}
 
 	// Assign ratio based on how we did against our entropy target
 	if (hi_entropy < target)
@@ -428,7 +394,7 @@ void generate_codebooks(struct quality_file_t *info) {
     	qpmf_list = alloc_pmf_list(A->size, q_output_union);
     
     	// Handle column zero specially
-		ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*opts->ratio, &q_lo, &q_hi, opts->verbose);
+		ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*opts->ratio, &q_lo, &q_hi);
 		q_lo->ratio = ratio;
 		q_hi->ratio = 1-ratio;
 		total_mse = ratio*q_lo->mse + (1-ratio)*q_hi->mse;
@@ -464,14 +430,13 @@ void generate_codebooks(struct quality_file_t *info) {
         	// for each previous value Q_i compute the quantizers
         	for (j = 0; j < q_output_union->size; ++j) {
         	    // Find and save quantizers
-				ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*opts->ratio, &q_lo, &q_hi, opts->verbose);
+				ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*opts->ratio, &q_lo, &q_hi);
 				q_lo->ratio = ratio;
 				q_hi->ratio = 1-ratio;
         	    store_cond_quantizers_indexed(q_lo, q_hi, ratio, q_list, column, j);
 
 				// This actually needs to be scaled by the probability of this quantizer pair being used to be accurate, uniform assumption is an approximation
 				total_mse += (ratio*q_lo->mse + (1-ratio)*q_hi->mse) / q_output_union->size;
-			
         	}
         
         	// deallocated the memory of the used pmfs and alphabet
@@ -480,7 +445,6 @@ void generate_codebooks(struct quality_file_t *info) {
 	        free_pmf_list(prev_qpmf_list);
 			prev_qpmf_list = qpmf_list;
 	        free_pmf_list(xpmf_list);
-	
     	}
     	
 		// Final cleanup, things we saved at the end of the final iteration that aren't needed
