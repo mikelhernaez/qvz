@@ -234,7 +234,6 @@ int main(int argc, char **argv) {
 				opts.ratio = atof(argv[i+1]);
 				opts.mode = MODE_FIXED;
 				i += 2;
-				printf("--Warning-- fixed rate encoding not yet implemented, falling back to ratio");
 				break;
 			case 'c':
 				opts.clusters = atoi(argv[i+1]);

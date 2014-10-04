@@ -394,7 +394,11 @@ void generate_codebooks(struct quality_file_t *info) {
     	qpmf_list = alloc_pmf_list(A->size, q_output_union);
     
     	// Handle column zero specially
-		ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*opts->ratio, &q_lo, &q_hi);
+		// @todo handle fixed mse target
+		if (opts->mode == MODE_RATIO)
+			ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, get_entropy(get_cond_pmf(in_pmfs, 0, 0))*opts->ratio, &q_lo, &q_hi);
+		else
+			ratio = optimize_for_entropy(get_cond_pmf(in_pmfs, 0, 0), dist, opts->ratio, &q_lo, &q_hi);
 		q_lo->ratio = ratio;
 		q_hi->ratio = 1-ratio;
 		total_mse = ratio*q_lo->mse + (1-ratio)*q_hi->mse;
@@ -430,7 +434,11 @@ void generate_codebooks(struct quality_file_t *info) {
         	// for each previous value Q_i compute the quantizers
         	for (j = 0; j < q_output_union->size; ++j) {
         	    // Find and save quantizers
-				ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*opts->ratio, &q_lo, &q_hi);
+				// @todo handle fixed mse target
+				if (opts->mode == MODE_RATIO)
+					ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, get_entropy(xpmf_list->pmfs[j])*opts->ratio, &q_lo, &q_hi);
+				else
+					ratio = optimize_for_entropy(xpmf_list->pmfs[j], dist, opts->ratio, &q_lo, &q_hi);
 				q_lo->ratio = ratio;
 				q_hi->ratio = 1-ratio;
         	    store_cond_quantizers_indexed(q_lo, q_hi, ratio, q_list, column, j);
