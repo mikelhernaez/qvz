@@ -88,22 +88,6 @@ struct distortion_t *gen_lorentzian_distortion(uint8_t symbols) {
 	return rtn;
 }
 
-double compute_distortion(uint32_t x, uint32_t y, uint8_t DIS){
-    
-    switch (DIS) {
-        case DISTORTION_LORENTZ:
-            return log2( 1.0 + (double)(abs(x - y)) );
-        case DISTORTION_MANHATTAN:
-            return abs(x - y);
-        case DISTORTION_MSE:
-            return (x - y)*(x - y);
-            
-        default:
-            printf("DISTORTION NOT RECOGNIZED\n");
-            return 0xffffffff;
-    }
-}
-
 /**
  * Retrieve the distortion for a pair (x, y). Generally x is the true value and
  * y is the reconstructed value. Handles the matrix->linear array indexing

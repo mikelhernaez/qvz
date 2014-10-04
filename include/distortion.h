@@ -26,8 +26,6 @@ struct distortion_t *gen_mse_distortion(uint8_t symbols);
 struct distortion_t *gen_manhattan_distortion(uint8_t symbols);
 struct distortion_t *gen_lorentzian_distortion(uint8_t symbols);
 
-double compute_distortion(uint32_t x, uint32_t y, uint8_t DIS);
-
 // Accessors
 double get_distortion(struct distortion_t *dist, uint8_t x, uint8_t y);
 

@@ -79,7 +79,7 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	// @todo qv_compression should use quality_file structure with data in memory, now
 	start_timer(&encoding);
 	write_codebooks(fout, &qv_info);
-    bytes_used = start_qv_compression(&qv_info, fout, &distortion, opts->distortion, funcompressed);
+    bytes_used = start_qv_compression(&qv_info, fout, &distortion, funcompressed);
 	stop_timer(&encoding);
 	stop_timer(&total);
 
