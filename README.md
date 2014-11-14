@@ -41,7 +41,7 @@ Compression Parameters:
 -d [M|L|A]    Compress while optimizing for MSE, Log(1+L1), or L1 distortions, respectively (default: MSE)
 
 Clustering Parameters:
--c [#]        Compress using # clusters. Going above 5 is not recommended due to computational complexity (default: 3)
+-c [#]        Compress using # clusters. Going above 5 is not recommended due to computational complexity (default: 1)
 -T [#]        Use # as a threshold for cluster centroid movement distance before declaring an approximate clustering as "good enough"
 
 Extra Options:
