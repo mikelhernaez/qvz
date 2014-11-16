@@ -53,13 +53,13 @@ Extra Options:
 
 ## Algorithm
 
-qvz uses the approach described in (paper reference) to perform lossy compression. Data is clustered
+qvz uses the approach described in a paper submitted to Bioinformatics to perform lossy compression. Data is clustered
 to reduce global variability, then each cluster is compressed by calculating a set of quantization
 matrices that performs optimally under the chosen distortion metric  and the empirical statistics of
 the data, using a first order Markov prediction model.
 
 ## License
-qvz is available under the terms of the (license todo) license. See LICENSE for more information.
+qvz is available under the terms of the GPLv3. See COPYING for more information.
 
 ## Bugs and Feedback
 Please use GitHub issues to open bug reports or provide feedback about qvz.
