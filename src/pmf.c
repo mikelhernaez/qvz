@@ -68,6 +68,7 @@ struct pmf_list_t *alloc_pmf_list(uint32_t size, const struct alphabet_t *alphab
  */
 void free_alphabet(struct alphabet_t *alphabet) {
 	free(alphabet->symbols);
+	free(alphabet->indexes);
 	free(alphabet);
 }
 
