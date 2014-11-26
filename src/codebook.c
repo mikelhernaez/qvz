@@ -73,7 +73,7 @@ void free_cond_quantizer_list(struct cond_quantizer_list_t *list) {
 
 	for (i = 0; i < list->columns; ++i) {
 		if (list->q[i]) {
-			for (j = 0; j < list->input_alphabets[i]->size; ++i) {
+			for (j = 0; j < list->input_alphabets[i]->size; ++j) {
 				if (list->q[i][j])
 					free_quantizer(list->q[i][j]);
 			}
