@@ -42,7 +42,7 @@ void free_conditional_pmf_list(struct cond_pmf_list_t *list) {
 	uint32_t i;
 
 	for (i = 0; i < count; ++i) {
-		free_pmf(list->pmfs[0]);
+		free_pmf(list->pmfs[i]);
 	}
 	free(list);
 
