@@ -109,6 +109,7 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
                 break;
 			case DISTORTION_CUSTOM:
 				printf("Custom distortion: %f\n", distortion);
+				break;
             default:
                 break;
         }

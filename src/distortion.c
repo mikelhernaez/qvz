@@ -124,6 +124,7 @@ struct distortion_t *gen_custom_distortion(uint8_t symbols, const char *filename
 			field += 1;
 			dist->distortion[x + symbols*y] = atof(field);
 			field = strchr(field, ',');
+			y += 1;
 		}
 
 		while (y < symbols) {
@@ -135,6 +136,8 @@ struct distortion_t *gen_custom_distortion(uint8_t symbols, const char *filename
 			printf("Warning: one or more entries in the distortion matrix on line %d were missing", x);
 			printf(" they have been filled with 0.0\n");
 		}
+
+		x += 1;
 	}
 
 	fclose(fp);
