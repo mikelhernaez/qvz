@@ -10,13 +10,15 @@
 #include "qv_compressor.h"
 #include "cluster.h"
 
+#define ALPHABET_SIZE 41
+
 /**
  *
  */
 void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
 	struct quality_file_t qv_info;
-	struct distortion_t *dist = generate_distortion_matrix(41, opts->distortion);
-	struct alphabet_t *alphabet = alloc_alphabet(41);
+	struct distortion_t *dist;
+	struct alphabet_t *alphabet = alloc_alphabet(ALPHABET_SIZE);
 	uint32_t status;
 	struct hrtimer_t cluster_time, stats, encoding, total;
 	FILE *fout, *funcompressed = NULL;
@@ -24,6 +26,13 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
     double distortion;
 
 	start_timer(&total);
+
+	if (opts->distortion == DISTORTION_CUSTOM) {
+		dist = gen_custom_distortion(ALPHABET_SIZE, opts->dist_file);
+	}
+	else {
+		dist = generate_distortion_matrix(ALPHABET_SIZE, opts->distortion);
+	}
     
 	qv_info.alphabet = alphabet;
 	qv_info.dist = dist;
@@ -98,6 +107,8 @@ void encode(char *input_name, char *output_name, struct qv_options_t *opts) {
             case DISTORTION_LORENTZ:
                 printf("log(1+L1) distortion: %f\n", distortion);
                 break;
+			case DISTORTION_CUSTOM:
+				printf("Custom distortion: %f\n", distortion);
             default:
                 break;
         }
@@ -154,18 +165,22 @@ void decode(char *input_file, char *output_file, struct qv_options_t *opts) {
 void usage(char *name) {
 	printf("Usage: %s (options) [input file] [output file]\n", name);
 	printf("Options are:\n");
-	printf("\t-q\t\t\t: Store quality values in compressed file (default)\n");
-	printf("\t-x\t\t\t: Extract quality values from compressed file\n");
-	printf("\t-f [ratio]\t: Compress using [ratio] bits per bit of input entropy per symbol\n");
-	printf("\t-r [rate]\t: Compress using fixed [rate] bits per symbol\n");
-    printf("\t-d [M|L|A]\t: Optimize for MSE, Log(1+L1), L1 distortions, respectively (default: MSE)\n");
-	printf("\t-c [#]\t\t: Compress using [#] clusters (default: 1)\n");
-	printf("\t-T [#]\t\t: Use [#] as a threshold for cluster center movement (L2 norm) to declare a stable solution (default: 4).\n");
-    printf("\t-u [FILE]\t: Write the uncompressed lossy values to FILE (default: off)\n");
-	printf("\t-h\t\t\t: Print this help\n");
-	printf("\t-s\t\t\t: Print summary stats\n");
-	printf("\t-t [lines]\t: Number of lines to use as training set (0 for all, 1000000 default)\n");
-	printf("\t-v\t\t\t: Enable verbose output\n");
+	printf("   -q           : Store quality values in compressed file (default)\n");
+	printf("   -x           : Extract quality values from compressed file\n");
+	printf("   -f [ratio]   : Compress using [ratio] bits per bit of input entropy per symbol\n");
+	printf("   -r [rate]    : Compress using fixed [rate] bits per symbol\n");
+    printf("   -d [M|L|A]   : Optimize for MSE, Log(1+L1), L1 distortions, respectively (default: MSE)\n");
+	printf("   -D [FILE]    : Optimize using the custom distortion matrix specified in FILE\n");
+	printf("   -c [#]       : Compress using [#] clusters (default: 1)\n");
+	printf("   -T [#]       : Use [#] as a threshold for cluster center movement (L2 norm) to declare a stable solution (default: 4).\n");
+    printf("   -u [FILE]    : Write the uncompressed lossy values to FILE (default: off)\n");
+	printf("   -h           : Print this help\n");
+	printf("   -s           : Print summary stats\n");
+	printf("   -t [lines]   : Number of lines to use as training set (0 for all, 1000000 default)\n");
+	printf("   -v           : Enable verbose output\n");
+	printf("\nFor custom distortion matrices, a 41x41 matrix of values must be provided as the cost of reconstructing\n");
+	printf("the x-th row as the y-th column, where x and y range from 0 to 40 (inclusive) corresponding to the possible\n");
+	printf("Phred scores.\n");
 }
 
 /**
@@ -280,6 +295,11 @@ int main(int argc, char **argv) {
                 }
                 i += 2;
                 break;
+			case 'D':
+				opts.distortion = DISTORTION_CUSTOM;
+				opts.dist_file = argv[i+1];
+				i += 2;
+				break;
 			default:
 				printf("Unrecognized option -%c.\n", argv[i][1]);
 				usage(argv[0]);
@@ -300,14 +320,28 @@ int main(int argc, char **argv) {
 		else {
 			printf("%s will be encoded as %s.\n", input_name, output_name);
 			if (opts.mode == MODE_RATIO)
-				printf("Ratio mode selected, targeting %f compression ratio\n", opts.ratio);
+				printf("Ratio mode selected, targeting %f compression ratio.\n", opts.ratio);
 			else if (opts.mode == MODE_FIXED)
-				printf("Fixed-rate mode selected, targeting %f bits per symbol\n", opts.ratio);
+				printf("Fixed-rate mode selected, targeting %f bits per symbol.\n", opts.ratio);
 			else if (opts.mode == MODE_FIXED_MSE)
-				printf("Fixed-MSE mode selected, targeting %f average MSE per context\n", opts.ratio);
+				printf("Fixed-MSE mode selected, targeting %f average distortion per context.\n", opts.ratio);
+
+			switch (opts.distortion) {
+				case DISTORTION_MSE:
+					printf("MSE will be used as a distortion metric.\n");
+					break;
+				case DISTORTION_LORENTZ:
+					printf("log(1+L1) will be used as a distortion metric.\n");
+					break;
+				case DISTORTION_MANHATTAN:
+					printf("L1 will be used as a distortion metric.\n");
+					break;
+				case DISTORTION_CUSTOM:
+					printf("A custom distortion metric stored in %s will be used.\n", opts.dist_file);
+					break;
+			}
 
 			printf("Compression will use %d clusters, with a movement threshold of %.0f\n", opts.clusters, opts.cluster_threshold);
-			// @todo other modes?
 		}
 	}
 
