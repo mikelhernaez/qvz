@@ -177,7 +177,6 @@ void usage(char *name) {
     printf("   -u [FILE]    : Write the uncompressed lossy values to FILE (default: off)\n");
 	printf("   -h           : Print this help\n");
 	printf("   -s           : Print summary stats\n");
-	printf("   -t [lines]   : Number of lines to use as training set (0 for all, 1000000 default)\n");
 	printf("   -v           : Enable verbose output\n");
 	printf("\nFor custom distortion matrices, a 41x41 matrix of values must be provided as the cost of reconstructing\n");
 	printf("the x-th row as the y-th column, where x and y range from 0 to 40 (inclusive) corresponding to the possible\n");
@@ -196,7 +195,6 @@ int main(int argc, char **argv) {
 	uint8_t extract = 0;
 	uint8_t file_idx = 0;
 
-	opts.training_size = 1000000;
 	opts.verbose = 0;
 	opts.stats = 0;
 	opts.ratio = 0.5;
@@ -265,10 +263,6 @@ int main(int argc, char **argv) {
 			case 's':
 				opts.stats = 1;
 				i += 1;
-				break;
-			case 't':
-				opts.training_size = atoi(argv[i+1]);
-				i += 2;
 				break;
             case 'u':
                 opts.uncompressed = 1;
