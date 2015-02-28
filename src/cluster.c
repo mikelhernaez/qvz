@@ -35,7 +35,7 @@ struct cluster_list_t *alloc_cluster_list(struct quality_file_t *info) {
 		rtn->clusters[j].id = j;
 		rtn->clusters[j].count = 0;
 		rtn->clusters[j].mean = (symbol_t *) calloc(info->columns, sizeof(symbol_t));
-		rtn->clusters[j].members = (struct line_t **) calloc(info->lines, sizeof(struct line_t *));
+		rtn->clusters[j].accumulator = (uint64_t *) calloc(info->columns, sizeof(uint64_t));
 		rtn->clusters[j].training_stats = alloc_conditional_pmf_list(info->alphabet, info->columns);
 	}
 
@@ -50,7 +50,7 @@ void free_cluster_list(struct cluster_list_t *clusters) {
 
 	for (j = 0; j < clusters->count; ++j) {
 		free(clusters->clusters[j].mean);
-		free(clusters->clusters[j].members);
+		free(clusters->clusters[j].accumulator);
 		free_conditional_pmf_list(clusters->clusters[j].training_stats);
 	}
 	free(clusters->distances);
@@ -78,56 +78,56 @@ uint8_t cluster_lines(struct line_block_t *block, struct quality_file_t *info) {
  * the next iteration.
  */
 double recalculate_means(struct quality_file_t *info) {
-	uint8_t i;
-	double moved, move_max = 0.0;
+	uint32_t block, line_idx;
+	uint32_t i, j;
+	struct line_t *line;
+	struct cluster_t *cluster;
+	uint8_t new_mean;
+	double dist, moved;
+	double move_max = 0.0;
 
+	// Reset cluster accumulators for new center calculation
 	for (i = 0; i < info->cluster_count; ++i) {
-		moved = calculate_cluster_mean(&info->clusters->clusters[i], info);
+		memset(info->clusters->clusters[i].accumulator, 0, info->columns*sizeof(uint64_t));
+	}
+
+	// Iterate linewise to accumulate into cluster centers
+	for (block = 0; block < info->block_count; ++block) {
+		for (line_idx = 0; line_idx < info->blocks[block].count; ++line_idx) {
+			line = &info->blocks[block].lines[line_idx];
+			cluster = &info->clusters->clusters[line->cluster];
+			for (i = 0; i < info->columns; ++i) {
+				cluster->accumulator[i] += line->m_data[i];
+			}
+		}
+	}
+
+	// Now find new cluster centers and compute motion
+	for (i = 0; i < info->cluster_count; ++i) {
+		cluster = &info->clusters->clusters[i];
+		dist = 0.0;
+		moved = 0.0;
+
+		for (j = 0; j < info->columns; ++j) {
+			// Integer division to find the mean, guaranteed to be less than the alphabet size
+			new_mean = (uint8_t) (cluster->accumulator[j] / cluster->count);
+
+			// Also figure out how far we've moved
+			dist = new_mean - cluster->mean[j];
+			moved += dist*dist;
+
+			// Write back the new cluster center
+			cluster->mean[j] = new_mean;
+		}
+
 		if (moved > move_max)
 			move_max = moved;
 
-		if (info->opts->verbose) {
+		if (info->opts->verbose)
 			printf("Cluster %d moved %f.\n", i, moved);
-		}
 	}
 
 	return move_max;
-}
-
-/**
- * Calculates the mean for a cluster.
- */
-double calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *info) {
-	struct line_t *line;
-	uint32_t i, j;
-	double rtn, dist;
-	symbol_t *old_mean;
-	uint64_t *accumulator = (uint64_t *) _alloca(info->columns*sizeof(uint64_t));
-	old_mean = (uint8_t *) _alloca(info->columns*sizeof(uint8_t));
-
-	// Clear previous
-	memset(accumulator, 0, info->columns*sizeof(uint64_t));
-	memcpy(old_mean, cluster->mean, info->columns*sizeof(uint8_t));
-
-	// Sum up everything column-wise
-	for (i = 0; i < cluster->count; ++i) {
-		line = cluster->members[i];
-		for (j = 0; j < info->columns; ++j) {
-			accumulator[j] += line->m_data[j];
-		}
-	}
-
-	rtn = 0;
-	for (j = 0; j < info->columns; ++j) {
-		// Integer division to find the mean, guaranteed to be less than the alphabet size
-		cluster->mean[j] = (uint8_t) (accumulator[j] / cluster->count);
-		
-		// Also figure out how far we've moved
-		dist = cluster->mean[j] - old_mean[j];
-		rtn += dist*dist;
-	}
-
-	return rtn;
 }
 
 /**
@@ -165,7 +165,6 @@ uint8_t assign_cluster(struct line_t *line, struct quality_file_t *info) {
 	// Assign to that cluster
 	line->cluster = id;
 	cluster = &info->clusters->clusters[id];
-	cluster->members[cluster->count] = line;
 	cluster->count += 1;
 
 	return (prev_id == id) ? 0 : 1;

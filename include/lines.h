@@ -42,8 +42,8 @@ struct cluster_t {
 	// Used to do clustering
 	uint8_t id;					// Cluster ID
 	uint32_t count;				// Number of lines in this cluster
-	struct line_t **members;	// Array of pointers to the members
 	symbol_t *mean;				// Mean values for this cluster
+	uint64_t *accumulator;		// Accumulator for finding a new cluster center
 
 	// Used after clustering is done
 	struct cond_pmf_list_t *training_stats;
