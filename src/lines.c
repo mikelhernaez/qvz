@@ -87,10 +87,7 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
  */
 uint32_t alloc_blocks(struct quality_file_t *info) {
 	uint64_t lines_left = info->lines;
-	double *dist_buf;
 	struct line_block_t *cblock;
-	struct line_t *cline;
-	uint32_t i;
 
 	// Figure out how many blocks we'll need to store this file
 	info->block_count = (uint32_t) (info->lines / (uint64_t)MAX_LINES_PER_BLOCK);
@@ -116,18 +113,9 @@ uint32_t alloc_blocks(struct quality_file_t *info) {
 		}
 
 		// Allocate array of line info structs for the block
-		dist_buf = (double *) calloc(cblock->count, info->cluster_count*sizeof(double));
 		cblock->lines = (struct line_t *) calloc(cblock->count, sizeof(struct line_t));
-		cline = cblock->lines;
-		if (!cblock->lines || !dist_buf) {
+		if (!cblock->lines) {
 			return LF_ERROR_NO_MEMORY;
-		}
-
-		// Save pointers into the symbol buffer for each line in the block
-		for (i = 0; i < cblock->count; ++i) {
-			cline->distances = dist_buf;
-			cline += 1;
-			dist_buf += info->cluster_count;
 		}
 
 		// Advance to the next line block
@@ -142,11 +130,10 @@ uint32_t alloc_blocks(struct quality_file_t *info) {
  */
 void free_blocks(struct quality_file_t *info) {
 	// Array of block pointers is a single allocation
-	// For each block, array of lines and array of symbols are both single allocations
+	// For each block, array of lines is a single allocations
 	uint32_t i;
 
 	for (i = 0; i < info->block_count; ++i) {
-		free(info->blocks[i].lines[0].distances);
 		free(info->blocks[i].lines);
 	}
 	free(info->blocks);

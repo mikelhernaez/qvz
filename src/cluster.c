@@ -28,14 +28,13 @@ struct cluster_list_t *alloc_cluster_list(struct quality_file_t *info) {
 	// Allocate array of cluster structures
 	rtn->count = info->cluster_count;
 	rtn->clusters = (struct cluster_t *) calloc(info->cluster_count, sizeof(struct cluster_t));
+	rtn->distances = (double *) calloc(info->cluster_count, sizeof(double));
 
 	// Fill in each cluster
 	for (j = 0; j < info->cluster_count; ++j) {
 		rtn->clusters[j].id = j;
 		rtn->clusters[j].count = 0;
 		rtn->clusters[j].mean = (symbol_t *) calloc(info->columns, sizeof(symbol_t));
-		// mean.cluster is skipped because it is unused
-		// mean.distances remains a null pointer because it is unused
 		rtn->clusters[j].members = (struct line_t **) calloc(info->lines, sizeof(struct line_t *));
 		rtn->clusters[j].training_stats = alloc_conditional_pmf_list(info->alphabet, info->columns);
 	}
@@ -54,6 +53,7 @@ void free_cluster_list(struct cluster_list_t *clusters) {
 		free(clusters->clusters[j].members);
 		free_conditional_pmf_list(clusters->clusters[j].training_stats);
 	}
+	free(clusters->distances);
 	free(clusters->clusters);
 	free(clusters);
 }
@@ -151,13 +151,14 @@ uint8_t assign_cluster(struct line_t *line, struct quality_file_t *info) {
 	uint8_t prev_id = line->cluster;
 	uint8_t i;
 	struct cluster_t *cluster;
-	double d = line->distances[0];
+	double *distances = info->clusters->distances;
+	double d = distances[0];
 
 	// Find the cluster with minimum distance
 	for (i = 1; i < info->cluster_count; ++i) {
-		if (line->distances[i] < d) {
+		if (distances[i] < d) {
 			id = i;
-			d = line->distances[i];
+			d = distances[i];
 		}
 	}
 
@@ -183,7 +184,7 @@ void find_distance(struct line_t *line, struct cluster_t *cluster, struct qualit
 		mean = cluster->mean[i];
 		d += (data - mean) * (data - mean);
 	}
-	line->distances[cluster->id] = d;
+	info->clusters->distances[cluster->id] = d;
 }
 
 /**

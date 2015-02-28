@@ -25,7 +25,6 @@
 struct line_t {
 	uint8_t cluster;		// Assigned cluster ID
 	const symbol_t *m_data;	// Pointer to part of mmap'd region, has no offsets applied, do not modify!
-	double *distances;		// Distance to center of each cluster
 };
 
 /**
@@ -57,6 +56,7 @@ struct cluster_t {
 struct cluster_list_t {
 	uint8_t count;
 	struct cluster_t *clusters;
+	double *distances;			// Temporary storage for distances to each cluster center
 };
 
 /**
