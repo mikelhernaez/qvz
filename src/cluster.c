@@ -33,7 +33,7 @@ struct cluster_list_t *alloc_cluster_list(struct quality_file_t *info) {
 	for (j = 0; j < info->cluster_count; ++j) {
 		rtn->clusters[j].id = j;
 		rtn->clusters[j].count = 0;
-		rtn->clusters[j].mean.data = (symbol_t *) calloc(info->columns, sizeof(symbol_t));
+		rtn->clusters[j].mean = (symbol_t *) calloc(info->columns, sizeof(symbol_t));
 		// mean.cluster is skipped because it is unused
 		// mean.distances remains a null pointer because it is unused
 		rtn->clusters[j].members = (struct line_t **) calloc(info->lines, sizeof(struct line_t *));
@@ -50,7 +50,7 @@ void free_cluster_list(struct cluster_list_t *clusters) {
 	uint8_t j;
 
 	for (j = 0; j < clusters->count; ++j) {
-		free(clusters->clusters[j].mean.data);
+		free(clusters->clusters[j].mean);
 		free(clusters->clusters[j].members);
 		free_conditional_pmf_list(clusters->clusters[j].training_stats);
 	}
@@ -101,29 +101,29 @@ double calculate_cluster_mean(struct cluster_t *cluster, struct quality_file_t *
 	struct line_t *line;
 	uint32_t i, j;
 	double rtn, dist;
-	struct line_t old_mean;
+	symbol_t *old_mean;
 	uint64_t *accumulator = (uint64_t *) _alloca(info->columns*sizeof(uint64_t));
-	old_mean.data = (uint8_t *) _alloca(info->columns*sizeof(uint8_t));
+	old_mean = (uint8_t *) _alloca(info->columns*sizeof(uint8_t));
 
 	// Clear previous
 	memset(accumulator, 0, info->columns*sizeof(uint64_t));
-	memcpy(old_mean.data, cluster->mean.data, info->columns*sizeof(uint8_t));
+	memcpy(old_mean, cluster->mean, info->columns*sizeof(uint8_t));
 
 	// Sum up everything column-wise
 	for (i = 0; i < cluster->count; ++i) {
 		line = cluster->members[i];
 		for (j = 0; j < info->columns; ++j) {
-			accumulator[j] += line->data[j];
+			accumulator[j] += line->m_data[j];
 		}
 	}
 
 	rtn = 0;
 	for (j = 0; j < info->columns; ++j) {
 		// Integer division to find the mean, guaranteed to be less than the alphabet size
-		cluster->mean.data[j] = (uint8_t) (accumulator[j] / cluster->count);
+		cluster->mean[j] = (uint8_t) (accumulator[j] / cluster->count);
 		
 		// Also figure out how far we've moved
-		dist = cluster->mean.data[j] - old_mean.data[j];
+		dist = cluster->mean[j] - old_mean[j];
 		rtn += dist*dist;
 	}
 
@@ -179,10 +179,9 @@ void find_distance(struct line_t *line, struct cluster_t *cluster, struct qualit
 	uint32_t data, mean;
 
 	for (i = 0; i < info->columns; ++i) {
-		data = line->data[i];
-		mean = cluster->mean.data[i];
-		//d += (data - mean) * (data - mean);
-		d += get_distortion(info->dist, data, mean);
+		data = line->m_data[i];
+		mean = cluster->mean[i];
+		d += (data - mean) * (data - mean);
 	}
 	line->distances[cluster->id] = d;
 }
@@ -199,7 +198,7 @@ void initialize_kmeans_clustering(struct quality_file_t *info) {
 	for (j = 0; j < info->cluster_count; ++j) {
 		block_id = rand() % info->block_count;
 		line_id = rand() % info->blocks[block_id].count;
-		memcpy(clusters->clusters[j].mean.data, info->blocks[block_id].lines[line_id].data, info->columns*sizeof(uint8_t));
+		memcpy(clusters->clusters[j].mean, info->blocks[block_id].lines[line_id].m_data, info->columns*sizeof(uint8_t));
 		if (info->opts->verbose) {
 			printf("Chose block %d, line %d.\n", block_id, line_id);
 		}

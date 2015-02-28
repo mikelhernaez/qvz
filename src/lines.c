@@ -7,6 +7,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
 #include "lines.h"
 
@@ -18,18 +20,23 @@
  * @param path Path of the file to read
  * @param info Information structure to store in, this must be a valid pointer already
  * @param max_lines Maximum number of lines to read, will override the actual number in the file if >0
+ * @todo @xxx This assumes we have only newlines in the file despite some vague attempts to handle \r\n as well
+ * @todo @xxx It WILL break the mapping if given a file with \r characters
+ * @todo Implement windows analog to mmap to provide the same facility
  */
 uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_lines) {
 	uint32_t status, block_idx, line_idx;
-	uint32_t j;
 	char line[READ_LINEBUF_LENGTH];
 	FILE *fp;
+	int fd;
 	struct _stat finfo;
+	void *file_mmap;
 
 	// Load metadata into the info structure
 	info->path = strdup(path);
 	fp = fopen(path, "rt");
-	if (!fp) {
+	fd = open(path, O_RDONLY);
+	if (!fp || fd == -1) {
 		return LF_ERROR_NOT_FOUND;
 	}
 
@@ -40,6 +47,7 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 		fclose(fp);
 		return LF_ERROR_TOO_LONG;
 	}
+	fclose(fp);
 
 	// Figure out how many lines we'll need depending on whether we were limited or not
 	_stat(path, &finfo);
@@ -52,16 +60,15 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 	if (status != LF_ERROR_NONE)
 		return status;
 
+	// mmap the file to set up constant pointers indexing it
+	file_mmap = mmap(NULL, finfo.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
 	// Process the file
 	block_idx = 0;
 	line_idx = 0;
-	fseek(fp, 0, SEEK_SET);
-	while (!feof(fp) && (block_idx * MAX_LINES_PER_BLOCK + line_idx) < info->lines) {
-		// Read line and store in our array with data conversion, also stripping newlines
-		fgets(line, READ_LINEBUF_LENGTH, fp);
-		for (j = 0; j < info->columns; ++j) {
-			info->blocks[block_idx].lines[line_idx].data[j] = line[j] - 33;
-		}
+	while ((block_idx * MAX_LINES_PER_BLOCK + line_idx) < info->lines) {
+		// Setting up mmap indexing assumes we have only one line ending!
+		info->blocks[block_idx].lines[line_idx].m_data = file_mmap + (block_idx * MAX_LINES_PER_BLOCK + line_idx) * (info->columns+1);
 
 		// Increment line/block pointers as necesary
 		line_idx += 1;
@@ -71,7 +78,6 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 		}
 	}
 
-	fclose(fp);
 	return LF_ERROR_NONE;
 }
 
@@ -81,7 +87,6 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
  */
 uint32_t alloc_blocks(struct quality_file_t *info) {
 	uint64_t lines_left = info->lines;
-	symbol_t *sym_buf;
 	double *dist_buf;
 	struct line_block_t *cblock;
 	struct line_t *cline;
@@ -110,21 +115,18 @@ uint32_t alloc_blocks(struct quality_file_t *info) {
 			lines_left = 0;
 		}
 
-		// Allocate symbol buffer and array of line info structs for the block
-		sym_buf = (symbol_t *) calloc(cblock->count, info->columns*sizeof(symbol_t));
+		// Allocate array of line info structs for the block
 		dist_buf = (double *) calloc(cblock->count, info->cluster_count*sizeof(double));
 		cblock->lines = (struct line_t *) calloc(cblock->count, sizeof(struct line_t));
 		cline = cblock->lines;
-		if (!sym_buf || !cblock->lines || !dist_buf) {
+		if (!cblock->lines || !dist_buf) {
 			return LF_ERROR_NO_MEMORY;
 		}
 
 		// Save pointers into the symbol buffer for each line in the block
 		for (i = 0; i < cblock->count; ++i) {
-			cline->data = sym_buf;
 			cline->distances = dist_buf;
 			cline += 1;
-			sym_buf += info->columns;
 			dist_buf += info->cluster_count;
 		}
 
@@ -144,7 +146,6 @@ void free_blocks(struct quality_file_t *info) {
 	uint32_t i;
 
 	for (i = 0; i < info->block_count; ++i) {
-		free(info->blocks[i].lines[0].data);
 		free(info->blocks[i].lines[0].distances);
 		free(info->blocks[i].lines);
 	}

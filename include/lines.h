@@ -24,7 +24,7 @@
  */
 struct line_t {
 	uint8_t cluster;		// Assigned cluster ID
-	symbol_t *data;			// Actual data
+	const symbol_t *m_data;	// Pointer to part of mmap'd region, has no offsets applied, do not modify!
 	double *distances;		// Distance to center of each cluster
 };
 
@@ -44,7 +44,7 @@ struct cluster_t {
 	uint8_t id;					// Cluster ID
 	uint32_t count;				// Number of lines in this cluster
 	struct line_t **members;	// Array of pointers to the members
-	struct line_t mean;			// Fake line whose values are the mean for this cluster
+	symbol_t *mean;				// Mean values for this cluster
 
 	// Used after clustering is done
 	struct cond_pmf_list_t *training_stats;

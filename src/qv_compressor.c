@@ -62,6 +62,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 	uint8_t cluster_id;
 
 	struct line_t *line;
+	symbol_t data;
         
     
     // Initialize the compressor
@@ -88,12 +89,12 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 		q = choose_quantizer(qlist, &info->well, 0, 0, &idx);
         
 		// Quantize, compress and calculate error simultaneously
-		// Reading in the lines corrects the quality values to alphabet offsets
-		qv = q->q[line->data[0]];
+		data = line->m_data[0] - 33;
+		qv = q->q[data];
         
         q_state = get_symbol_index(q->output_alphabet, qv);
         compress_qv(qvc->Quals, q_state, cluster_id, 0, idx);
-		error = get_distortion(info->dist, line->data[0], qv);
+		error = get_distortion(info->dist, data, qv);
         
         // @todo use buffer to speed up the writing
         if (funcompressed != NULL) {
@@ -104,7 +105,8 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
         
 		for (s = 1; s < columns; ++s) {
 			q = choose_quantizer(qlist, &info->well, s, prev_qv, &idx);
-			qv = q->q[line->data[s]];
+			data = line->m_data[s] - 33;
+			qv = q->q[data];
             q_state = get_symbol_index(q->output_alphabet, qv);
             
             // @todo use buffer to speed up the writing
@@ -113,7 +115,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
             }
             
             compress_qv(qvc->Quals, q_state, cluster_id, s, idx);
-			error += get_distortion(info->dist, line->data[s], qv);
+			error += get_distortion(info->dist, data, qv);
             prev_qv = qv;
 		}
         

@@ -18,7 +18,7 @@ all : qvz
 qvz : $(OBJ)
 	$(CC) $(OBJ) -o qvz $(LDFLAGS)
 
-debug : CFLAGS += -DDEBUG -ggdb
+debug : CFLAGS += -DDEBUG -ggdb -O0
 debug : qvz
 
 clean :

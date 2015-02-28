@@ -196,9 +196,9 @@ void calculate_statistics(struct quality_file_t *info) {
 		// First, find conditional PMFs
 		for (line_idx = 0; line_idx < cluster->count; ++line_idx) {
 			line = cluster->members[line_idx];
-			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line->data[0]);
+			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line->m_data[0] - 33);
 			for (column = 1; column < info->columns; ++column) {
-				pmf_increment(get_cond_pmf(pmf_list, column, line->data[column-1]), line->data[column]);
+				pmf_increment(get_cond_pmf(pmf_list, column, line->m_data[column-1] - 33), line->m_data[column] - 33);
 			}
 		}
 

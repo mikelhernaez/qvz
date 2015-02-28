@@ -336,7 +336,7 @@ int main(int argc, char **argv) {
 					break;
 			}
 
-			printf("Compression will use %d clusters, with a movement threshold of %.0f\n", opts.clusters, opts.cluster_threshold);
+			printf("Compression will use %d clusters, with a movement threshold of %.0f.\n", opts.clusters, opts.cluster_threshold);
 		}
 	}
 
