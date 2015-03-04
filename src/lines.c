@@ -68,7 +68,7 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
 	line_idx = 0;
 	while ((block_idx * MAX_LINES_PER_BLOCK + line_idx) < info->lines) {
 		// Setting up mmap indexing assumes we have only one line ending!
-		info->blocks[block_idx].lines[line_idx].m_data = file_mmap + (block_idx * MAX_LINES_PER_BLOCK + line_idx) * (info->columns+1);
+		info->blocks[block_idx].lines[line_idx].m_data = file_mmap + ((uint64_t) (block_idx * MAX_LINES_PER_BLOCK + line_idx)) * (info->columns+1);
 
 		// Increment line/block pointers as necesary
 		line_idx += 1;
