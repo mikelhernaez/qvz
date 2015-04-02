@@ -10,7 +10,7 @@
 #include "qv_compressor.h"
 #include "cluster.h"
 
-#define ALPHABET_SIZE 41
+#define ALPHABET_SIZE 42
 
 /**
  *
