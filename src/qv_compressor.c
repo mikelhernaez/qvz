@@ -175,7 +175,7 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
 		q = choose_quantizer(qlist, &info->well, 0, 0, &idx);
         
 		// Quantize, compress and calculate error simultaneously
-		// Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
+		// Note that in this version the quantizer outputs are 0-72, so the +33 offset is different from before
         q_state = decompress_qv(qvc->Quals, cluster_id, 0, idx);
         line[0] = q->output_alphabet->symbols[q_state] + 33;
         prev_qv = line[0] - 33;
@@ -206,7 +206,7 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
     q = choose_quantizer(qlist, &info->well, 0, 0, &idx);
     
     // Quantize, compress and calculate error simultaneously
-    // Note that in this version the quantizer outputs are 0-41, so the +33 offset is different from before
+    // Note that in this version the quantizer outputs are 0-72, so the +33 offset is different from before
     q_state = decompress_qv(qvc->Quals, cluster_id, 0, idx);
     line[0] = q->output_alphabet->symbols[q_state] + 33;
     prev_qv = line[0] - 33;

@@ -8,7 +8,7 @@
 // Used to indicate a symbol not found during index lookup
 #define ALPHABET_SYMBOL_NOT_FOUND			UINT32_MAX
 
-#define ALPHABET_INDEX_SIZE_HINT			41
+#define ALPHABET_INDEX_SIZE_HINT			72
 
 // Unfortunately this is a bit brittle so don't change it
 typedef uint8_t symbol_t;

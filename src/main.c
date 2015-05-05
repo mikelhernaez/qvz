@@ -10,7 +10,7 @@
 #include "qv_compressor.h"
 #include "cluster.h"
 
-#define ALPHABET_SIZE 42
+#define ALPHABET_SIZE 72
 
 /**
  *
@@ -133,7 +133,7 @@ void decode(char *input_file, char *output_file, struct qv_options_t *opts) {
 	FILE *fin, *fout;
 	struct hrtimer_t timer;
 	struct quality_file_t qv_info;
-	struct alphabet_t *A = alloc_alphabet(41);
+	struct alphabet_t *A = alloc_alphabet(ALPHABET_SIZE);
     
 	qv_info.alphabet = A;
 	qv_info.opts = opts;
@@ -178,8 +178,8 @@ void usage(char *name) {
 	printf("   -h           : Print this help\n");
 	printf("   -s           : Print summary stats\n");
 	printf("   -v           : Enable verbose output\n");
-	printf("\nFor custom distortion matrices, a 41x41 matrix of values must be provided as the cost of reconstructing\n");
-	printf("the x-th row as the y-th column, where x and y range from 0 to 40 (inclusive) corresponding to the possible\n");
+	printf("\nFor custom distortion matrices, a 72x72 matrix of values must be provided as the cost of reconstructing\n");
+	printf("the x-th row as the y-th column, where x and y range from 0 to 71 (inclusive) corresponding to the possible\n");
 	printf("Phred scores.\n");
 }
 
