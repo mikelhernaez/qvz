@@ -7,8 +7,8 @@ OBJ=$(SRC:.c=.o)
 CC=gcc
 RM=rm -f
 
-CFLAGS=-O3 -Wall -I../include -D__APPLE__
-LDFLAGS=-lc -lm 
+CFLAGS=-O3 -Wall -I../include -DLINUX
+LDFLAGS=-lc -lm -lrt
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c $<
