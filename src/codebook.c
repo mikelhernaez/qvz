@@ -189,16 +189,18 @@ void calculate_statistics(struct quality_file_t *info) {
 	struct line_t *line;
 	struct cluster_t *cluster;
 	struct cond_pmf_list_t *pmf_list;
+    uint32_t read_length = 0;
 
 	for (block = 0; block < info->block_count; ++block) {
 		for (line_idx = 0; line_idx < info->blocks[block].count; ++line_idx) {
 			line = &info->blocks[block].lines[line_idx];
+            read_length = info->blocks[block].lines[line_idx].line_length;
 			cluster = &info->clusters->clusters[line->cluster];
 			pmf_list = cluster->training_stats;
 
 			// First, find conditional PMFs
 			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line->m_data[0] - 33);
-			for (column = 1; column < info->columns; ++column) {
+			for (column = 1; column < read_length; ++column) {
 				pmf_increment(get_cond_pmf(pmf_list, column, line->m_data[column-1] - 33), line->m_data[column] - 33);
 			}
 		}

@@ -75,6 +75,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 
 	do {
 		line = &info->blocks[block_idx].lines[line_idx];
+        columns = info->blocks[block_idx].lines[line_idx].line_length;
 		
         if (info->opts->verbose && line_idx == 0) {
             printf("Line: %dM\n", block_idx);
